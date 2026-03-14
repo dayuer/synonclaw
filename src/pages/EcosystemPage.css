@@ -1,0 +1,174 @@
+.eco-hero {
+  min-height: 70vh;
+  display: flex;
+  align-items: center;
+  background: var(--gradient-hero);
+  padding-top: var(--navbar-height);
+  text-align: center;
+}
+
+.eco-hero__inner {
+  animation: fadeInUp 800ms ease-out;
+}
+
+.eco-hero__tag {
+  display: inline-block;
+  padding: 4px 14px;
+  border-radius: var(--radius-full);
+  background: rgba(0, 212, 255, 0.1);
+  border: 1px solid rgba(0, 212, 255, 0.2);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-accent);
+  margin-bottom: var(--space-lg);
+}
+
+.eco-hero__title {
+  font-size: var(--text-h1);
+  font-weight: 800;
+  margin-bottom: var(--space-md);
+}
+
+.eco-hero__subtitle {
+  font-size: var(--text-body-lg);
+  color: var(--color-text-secondary);
+  max-width: 600px;
+  margin: 0 auto;
+  line-height: var(--leading-relaxed);
+}
+
+/* 工作流程图 */
+.eco-workflow {
+  background: var(--color-bg-secondary);
+}
+
+.eco-flow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: var(--space-xl) 0;
+  flex-wrap: wrap;
+}
+
+.eco-flow__step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  flex: 0 0 auto;
+}
+
+.eco-flow__node {
+  width: 160px;
+  padding: var(--space-xl) var(--space-lg);
+  background: var(--gradient-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  text-align: center;
+  transition: all var(--transition-normal);
+  position: relative;
+}
+
+.eco-flow__node:hover {
+  transform: translateY(-4px);
+  border-color: rgba(0, 212, 255, 0.3);
+  box-shadow: var(--shadow-card-hover);
+}
+
+.eco-flow__node-icon {
+  font-size: 2rem;
+  margin-bottom: var(--space-sm);
+}
+
+.eco-flow__node-title {
+  font-size: var(--text-small);
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin-bottom: 4px;
+}
+
+.eco-flow__node-desc {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.eco-flow__arrow {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-md);
+  position: relative;
+}
+
+.eco-flow__arrow-line {
+  width: 60px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--color-accent), transparent, var(--color-accent));
+  background-size: 200% 100%;
+  animation: flowLine 2s linear infinite;
+  position: relative;
+}
+
+.eco-flow__arrow-line::after {
+  content: '›';
+  position: absolute;
+  right: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-accent);
+  font-size: 1.5rem;
+  font-weight: 300;
+}
+
+/* 人机协同 */
+.eco-collab__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-xl);
+}
+
+.eco-collab__card {
+  background: var(--gradient-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-2xl);
+  transition: all var(--transition-normal);
+}
+
+.eco-collab__card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-card-hover);
+}
+
+.eco-collab__card-icon {
+  font-size: 2.5rem;
+  margin-bottom: var(--space-md);
+}
+
+.eco-collab__card-title {
+  font-size: var(--text-h3);
+  font-weight: 700;
+  margin-bottom: var(--space-sm);
+}
+
+.eco-collab__card-desc {
+  font-size: var(--text-small);
+  color: var(--color-text-secondary);
+  line-height: var(--leading-relaxed);
+}
+
+@media (max-width: 768px) {
+  .eco-flow {
+    flex-direction: column;
+    gap: var(--space-md);
+  }
+
+  .eco-flow__arrow {
+    transform: rotate(90deg);
+    padding: var(--space-sm) 0;
+  }
+
+  .eco-collab__grid {
+    grid-template-columns: 1fr;
+  }
+}

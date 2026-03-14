@@ -1,0 +1,136 @@
+/* ============================================
+   全局样式 — 通用组件与动画
+   ============================================ */
+
+@import './tokens.css';
+@import './reset.css';
+
+/* --- 动画关键帧 --- */
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(0, 212, 255, 0.15); }
+  50% { box-shadow: 0 0 40px rgba(0, 212, 255, 0.3); }
+}
+
+@keyframes flowLine {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+/* --- 容器 --- */
+
+.container {
+  width: 100%;
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+  padding: 0 var(--content-padding);
+}
+
+.section {
+  padding: var(--space-5xl) 0;
+  position: relative;
+}
+
+.section--alt {
+  background-color: var(--color-bg-secondary);
+}
+
+/* --- 滚动渐入 --- */
+
+.scroll-reveal {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity var(--transition-slow), transform var(--transition-slow);
+}
+
+.scroll-reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.scroll-reveal.visible:nth-child(2) { transition-delay: 100ms; }
+.scroll-reveal.visible:nth-child(3) { transition-delay: 200ms; }
+.scroll-reveal.visible:nth-child(4) { transition-delay: 300ms; }
+
+/* --- 特性网格 --- */
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--space-xl);
+}
+
+@media (max-width: 768px) {
+  .features-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- 装饰背景 --- */
+
+.glow-spot {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(120px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.glow-spot--blue {
+  background: rgba(0, 212, 255, 0.08);
+}
+
+.glow-spot--green {
+  background: rgba(0, 255, 136, 0.05);
+}
+
+/* --- 视口修正 --- */
+
+@media (max-width: 768px) {
+  .section {
+    padding: var(--space-3xl) 0;
+  }
+}

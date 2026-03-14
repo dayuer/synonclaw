@@ -1,0 +1,35 @@
+# 依赖
+node_modules/
+
+# 构建产物
+dist/
+dist-ssr/
+
+# 编辑器
+.vscode/
+.idea/
+*.sw?
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# 日志
+*.log
+npm-debug.log*
+
+# 测试覆盖率
+coverage/
+
+# TypeScript 缓存
+*.tsbuildinfo
+
+# team 工作流临时文件（归档后清理）
+team/test-fail-*.log
+team/vulnerability-report.md
+team/blocked.md

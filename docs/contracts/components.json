@@ -1,0 +1,184 @@
+{
+  "projectType": "static-frontend",
+  "framework": "vite-react-ts",
+  "designSystem": {
+    "colors": {
+      "bgPrimary": "#0a0a0f",
+      "bgSecondary": "#12121a",
+      "bgCard": "#1a1a2e",
+      "accent": "#00d4ff",
+      "accentGreen": "#00ff88",
+      "textPrimary": "#f0f0f5",
+      "textSecondary": "#8888aa",
+      "border": "#2a2a3e"
+    },
+    "fonts": {
+      "heading": "'Inter', sans-serif",
+      "body": "'Inter', sans-serif",
+      "mono": "'JetBrains Mono', monospace"
+    },
+    "breakpoints": {
+      "mobile": "480px",
+      "tablet": "768px",
+      "desktop": "1024px",
+      "wide": "1440px"
+    }
+  },
+  "routes": [
+    { "path": "/", "component": "HomePage", "title": "SynonClaw — 软硬一体的本地数字员工终端" },
+    { "path": "/desk", "component": "DeskPage", "title": "SynonClaw Desk — 桌面边缘算力中心" },
+    { "path": "/enterprise", "component": "EnterprisePage", "title": "SynonClaw Enterprise — 企业级算力集群" },
+    { "path": "/ecosystem", "component": "EcosystemPage", "title": "软件生态 — OpenClaw & 云兔" },
+    { "path": "/developer", "component": "DeveloperPage", "title": "开发者网络 — 学习·认证·接单" }
+  ],
+  "components": {
+    "layout": {
+      "Navbar": {
+        "props": {
+          "links": "NavLink[]",
+          "currentPath": "string"
+        },
+        "behavior": "顶部固定导航，滚动后添加模糊背景。移动端显示汉堡菜单。",
+        "testId": "navbar"
+      },
+      "Footer": {
+        "props": {},
+        "behavior": "全局底部，含公司信息、社交链接、备案号",
+        "testId": "footer"
+      },
+      "MobileMenu": {
+        "props": {
+          "isOpen": "boolean",
+          "onClose": "() => void"
+        },
+        "behavior": "移动端全屏滑出菜单，含导航链接",
+        "testId": "mobile-menu"
+      }
+    },
+    "home": {
+      "HeroSection": {
+        "props": {},
+        "behavior": "深色全屏首屏，双硬件渲染图，主副标题，双CTA按钮，入场渐入动画",
+        "testId": "hero-section"
+      },
+      "FeatureCard": {
+        "props": {
+          "icon": "ReactNode",
+          "title": "string",
+          "description": "string"
+        },
+        "behavior": "单个特性卡片，含图标、标题、描述，hover 提升效果",
+        "testId": "feature-card"
+      },
+      "FeaturesSection": {
+        "props": {},
+        "behavior": "三列特性区，滚动渐入动画",
+        "testId": "features-section"
+      }
+    },
+    "desk": {
+      "DeskHero": {
+        "props": {},
+        "behavior": "桌面版首屏，产品渲染图 + 预定 CTA",
+        "testId": "desk-hero"
+      },
+      "SpecTable": {
+        "props": {
+          "specs": "Spec[]"
+        },
+        "behavior": "硬件配置规格表格，网格化呈现",
+        "testId": "spec-table"
+      },
+      "ScenarioCard": {
+        "props": {
+          "title": "string",
+          "description": "string",
+          "icon": "ReactNode"
+        },
+        "behavior": "使用场景卡片",
+        "testId": "scenario-card"
+      }
+    },
+    "enterprise": {
+      "EnterpriseHero": {
+        "props": {},
+        "behavior": "企业版首屏，机柜渲染图 + 预约演示 CTA（触发模态框）",
+        "testId": "enterprise-hero"
+      },
+      "EnterpriseFeature": {
+        "props": {
+          "title": "string",
+          "description": "string",
+          "visual": "ReactNode"
+        },
+        "behavior": "企业级特性展示区块，含标题/描述/可视化元素",
+        "testId": "enterprise-feature"
+      },
+      "LeadFormModal": {
+        "props": {
+          "isOpen": "boolean",
+          "onClose": "() => void"
+        },
+        "behavior": "销售线索收集模态框，含表单验证",
+        "fields": [
+          { "name": "companyName", "label": "企业名称", "type": "text", "required": true },
+          { "name": "nodeCount", "label": "预计需求节点数", "type": "select", "options": ["1-10", "10-50", "50-100", "100+"], "required": true },
+          { "name": "contactName", "label": "联系人", "type": "text", "required": true },
+          { "name": "phone", "label": "联系电话", "type": "tel", "required": true },
+          { "name": "email", "label": "电子邮箱", "type": "email", "required": true }
+        ],
+        "testId": "lead-form-modal"
+      }
+    },
+    "developer": {
+      "DeveloperHero": {
+        "props": {},
+        "behavior": "开发者网络首屏",
+        "testId": "developer-hero"
+      },
+      "PathStep": {
+        "props": {
+          "step": "number",
+          "title": "string",
+          "description": "string"
+        },
+        "behavior": "成长路径步骤卡片",
+        "testId": "path-step"
+      }
+    },
+    "ecosystem": {
+      "WorkflowDiagram": {
+        "props": {},
+        "behavior": "OpenClaw → 云兔 工作流程图，含数据流向动画",
+        "testId": "workflow-diagram"
+      }
+    },
+    "shared": {
+      "CTAButton": {
+        "props": {
+          "variant": "'primary' | 'secondary'",
+          "href": "string",
+          "children": "ReactNode"
+        },
+        "behavior": "通用 CTA 按钮，primary=填充色, secondary=描边",
+        "testId": "cta-button"
+      },
+      "SectionTitle": {
+        "props": {
+          "title": "string",
+          "subtitle": "string"
+        },
+        "behavior": "区块标题组件",
+        "testId": "section-title"
+      },
+      "ScrollReveal": {
+        "props": {
+          "children": "ReactNode",
+          "delay": "number"
+        },
+        "behavior": "滚动进入视口时触发渐入动画的包装组件",
+        "testId": "scroll-reveal"
+      }
+    }
+  }
+}
