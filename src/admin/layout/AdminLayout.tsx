@@ -4,7 +4,6 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import AdminSidebar from './AdminSidebar'
 import AdminTopBar from './AdminTopBar'
 import DashboardPage from '../pages/DashboardPage'
-import ProductsPage from '../pages/ProductsPage'
 import DevicesPage from '../pages/DevicesPage'
 import CustomersPage from '../pages/CustomersPage'
 import OrdersPage from '../pages/OrdersPage'
@@ -29,7 +28,6 @@ export default function AdminLayout() {
         <div className="admin-content">
           <Routes>
             <Route index element={<DashboardPage />} />
-            <Route path="products" element={<ProductsPage />} />
             <Route path="devices" element={<DevicesPage />} />
             <Route path="customers" element={<CustomersPage />} />
             <Route path="orders" element={<OrdersPage />} />

@@ -4,7 +4,6 @@ import type { NavItem } from '../data/types'
 
 const NAV_ITEMS: NavItem[] = [
   { path: '/admin', label: '仪表盘', icon: '📊' },
-  { path: '/admin/products', label: '产品管理', icon: '🖥️' },
   { path: '/admin/devices', label: '设备管理', icon: '📡' },
   { path: '/admin/customers', label: '客户管理', icon: '🏢' },
   { path: '/admin/orders', label: '订单管理', icon: '📦' },
