@@ -1,11 +1,11 @@
 .home-hero {
-  min-height: 100vh;
   display: flex;
   align-items: center;
   background: var(--gradient-hero);
   position: relative;
   overflow: hidden;
-  padding-top: var(--navbar-height);
+  padding-top: calc(var(--navbar-height) + var(--space-3xl));
+  padding-bottom: var(--space-3xl);
 }
 
 .home-hero__bg-glow {

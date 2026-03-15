@@ -1,9 +1,9 @@
 .desk-hero {
-  min-height: 100vh;
   display: flex;
   align-items: center;
   background: var(--gradient-hero);
-  padding-top: var(--navbar-height);
+  padding-top: calc(var(--navbar-height) + var(--space-3xl));
+  padding-bottom: var(--space-3xl);
   position: relative;
   overflow: hidden;
 }
