@@ -2,22 +2,22 @@
 
 | 字段 | 值 |
 |------|-----|
-| 来源角色 | 🎯 PM（产品经理）— 覆盖度校验 |
-| 目标角色 | 👨‍💻 Alpha（架构 + 核心实现） |
-| 状态 | COVERAGE_APPROVED |
-| 复杂度 | L |
+| 来源角色 | PM |
+| 目标角色 | Alpha |
+| 状态 | CONTINUE |
+| 复杂度 | S |
 
 ### 本阶段完成事项
 
-- Phase 1: PM 需求分析 — 5 US + 7 AC + 10 任务拆解
-- Phase 2: BA 场景拆解 — 5 大场景组 27 条 + 8 边界条件
-- Phase 3: PM 覆盖度校验 — **7/7 AC 全覆盖 ✅ COVERAGE_APPROVED**
+- 需求分析完成，6 条 AC
+- 复杂度判定 S 级（纯 UI 状态切换 + 条件渲染）
 
 ### 下一阶段期望
 
-- Alpha 先做 L 级 Spike（R1: GNB 多实例共存、R2: macOS TUN、R3: UDP 打洞）
-- 然后 TDD 实现 5 个核心模块
-- 测试分组参照 `ba-scenarios.md` 的 Alpha TDD 建议
+- `AdminLayout` 添加 `isAdmin` 状态 + 浮动切换按钮
+- `AdminSidebar` 根据角色过滤导航组
+- 普通用户强制路由到 `/admin/workspace`
+- 浮动按钮样式：半透明、圆角、悬浮动画
 
 ### 阻塞项
 

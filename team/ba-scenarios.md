@@ -1,201 +1,284 @@
-# 业务场景拆解 — GNB 多租户 Passcode 网络隔离策略
+# 业务场景拆解 — SynonClaw 核心产品：OpenClaw 集中托管与分发控制台
 
 > **需求来源**: team/requirements.md
-> **拆解日期**: 2026-03-16
+> **拆解日期**: 2026-03-15
 > **业务经理**: BA
+> **复杂度**: L
 
 ---
 
-## 领域术语表
+## 1. 领域术语表
 
-| 术语 | 定义 | 数据实体 |
-|------|------|----------|
-| **Passcode** | GNB 网络的共享密钥，32 位十六进制字符串（8 字符），相同 Passcode 的节点组成同一虚拟网络 | `gnb_networks.passcode` |
-| **VIP** | Virtual IP，GNB 虚拟局域网内分配给每个节点的 IP 地址（如 `10.1.0.10`） | `devices.vip` |
-| **Node ID** | GNB 节点唯一标识，`uint32` 范围 `2001~9999`（设备端），`1001~1099`（SaaS 端） | `devices.gnb_node_id` |
-| **Tier** | 租户等级。Tier 1 = 共享网络 + iptables 隔离；Tier 2 = 独立 Passcode + 独立网段 | `tenants.tier` |
-| **Index 节点** | GNB 信令服务器，帮助节点互相发现和 NAT 穿透，不转发业务数据 | 部署配置 |
-| **GNB 网络** | 由相同 Passcode 组成的虚拟 L3 网络，内部节点可通过 VIP 互通 | `gnb_networks` |
-| **socat 桥接** | 将 GNB VIP 上的请求透明转发到本地 `127.0.0.1`，解决 OpenClaw 只监听 loopback 的限制 | 系统服务 |
-| **provision** | 设备首次通电时的自动注册和配置过程 | 脚本 `provision.sh` |
-| **心跳** | 设备定期向 SaaS 上报在线状态，同时拉取积压指令 | `devices.last_seen` |
+| 术语 | 定义 | 属性/关联 |
+|------|------|-----------|
+| 租户 (Tenant) | 使用 SynonClaw 的企业组织 | id, name, plan(basic/pro/enterprise), maxDevices, createdAt |
+| 租户管理员 (TenantAdmin) | 租户内的最高权限用户，管理设备/人/角色 | tenantId, name, email, role=admin |
+| 团队成员 (Member) | 租户内的普通用户，仅能使用数字员工 | tenantId, name, email, role=member, assignedWorkerIds[] |
+| 设备 (Device) | 一台托管的 OpenClaw 硬件节点 | tenantId, token, endpoint, status, rpcConfig |
+| RPC 配置 (RpcConfig) | 设备的底层运行参数 | modelProvider, apiKey, temperature, topP, maxTokens, systemPrompt, plugins[] |
+| 数字员工 (DigitalWorker) | 将设备包装为业务角色的抽象 | tenantId, name, description, deviceId, systemPrompt, plugins[], assignedMemberIds[] |
+| 插件 (Plugin) | OpenClaw 设备可开关的功能扩展 | id, name, description, enabled |
+| RPC 指令 (RpcCommand) | 从 GUI 操作翻译出的远程调用 | deviceId, method, params, response |
+| 订阅计划 (Plan) | 租户的付费级别 | type(basic/pro/enterprise), maxDevices(3/10/∞), maxMembers |
+| 对话 (Conversation) | 成员与数字员工之间的交互记录 | memberId, workerId, messages[], createdAt |
 
 ---
 
-## 业务链路图
+## 2. 业务链路图
 
-### 主链路 1: 设备注册 (Happy Path)
-
-```
-设备通电 → 运行 provision.sh → HTTPS POST /api/devices/register {serial_no, hw_fingerprint}
-→ SaaS 查 serial_no 对应租户 → 判定 Tier
-→ [Tier 1] 返回 {passcode: SHARED, vip: 10.1.0.x, node_id: 200x, index: "gnb-index-cn.synonclaw.com:9001"}
-   [Tier 2] 返回 {passcode: TENANT_X, vip: 10.{tid}.0.x, node_id: 200x, index: ...}
-→ 设备写入 GNB 配置 → 启动 GNB 服务 → 启动 socat 桥接 → 配置 iptables
-→ GNB 向 Index 注册 → 与 SaaS 节点建立 P2P 链路
-→ 心跳 GET /heartbeat 成功 → 设备标记 ONLINE
-```
-
-### 主链路 2: SaaS 远程管理设备 (Happy Path)
+### 主链路 1: 租户接入与设备托管 (Happy Path)
 
 ```
-管理员在 SaaS 网页修改 Agent 配置
-→ SaaS API 写入 DB (command status: PENDING) → 入队 Redis Stream
-→ Dispatch Worker 消费 → 查设备 VIP → POST http://10.x.x.x:18789/v1/config.patch
-→ socat 桥接 → OpenClaw Gateway → 200 OK
-→ Worker 更新 DB: status = DELIVERED
+租户注册 → 获取租户空间 → 管理员登录 → 进入设备管理 →
+点击"添加设备" → 输入 Token + 端点 → 系统验证 RPC 连接 →
+验证通过 → 设备纳入托管(status=online) → 设备列表更新 →
+Dashboard 统计刷新
 ```
 
-### 主链路 3: 租户升级 Tier 1 → Tier 2 (Happy Path)
+### 主链路 2: 设备参数远程配置
 
 ```
-管理员调用 PUT /api/tenants/{id}/upgrade
-→ 生成独立 Passcode + 分配网段 10.{tid}.0.0/16
-→ 启动 Docker GNB 容器 (SaaS 端)
-→ 遍历该租户所有设备 → 逐台下发新配置 {new_passcode, new_vip, new_node_id}
-→ 设备重启 GNB → 加入新网络 → 心跳到达 → 标记迁移完成
-→ 回收旧 VIP 和 Node ID → 更新租户 Tier = 2
+管理员 → 设备列表 → 点击设备 → 进入设备配置 →
+选择 LLM Provider → 输入 API Key → 设定温度/Top-P →
+编辑系统 Prompt → 开关插件 → 点击"保存配置" →
+系统翻译为 RPC 指令 → 下发到设备 → 设备应用配置 → 反馈成功
 ```
 
-### 异常链路 A: 设备离线时接收指令
+### 主链路 3: 数字员工定义与分配
 
 ```
-Worker 推送 POST → 超时/连接拒绝
-→ DB: status = RETRY, retry_count++ → 重新入队 (指数退避 30s→60s→120s→300s)
-→ 设备恢复在线 → 心跳触发 SaaS 检查 PENDING 指令 → 入队 → Worker 重试 → 成功
-→ 超过 48 次 (~24h) → status = FAILED → 告警
+管理员 → 数字员工管理 → 点击"创建数字员工" →
+输入角色名/描述 → 绑定设备 → 设定专属 Prompt + 插件 →
+保存角色 → 进入成员管理 → 选择成员 → 分配数字员工 → 保存
+→ 成员端实时刷新可用员工列表
 ```
 
-### 异常链路 B: 设备注册 — serial_no 未绑定租户
+### 主链路 4: 成员使用数字员工
 
 ```
-POST /api/devices/register {serial_no: "UNKNOWN"}
-→ SaaS 查不到对应租户 → 返回 403 {error: "DEVICE_NOT_BOUND"}
-→ 设备 provision.sh 写入 ERROR.log → 定时重试 (5min)
+团队成员登录 → 看到"我的数字员工"列表 →
+选择一个数字员工 → 进入对话界面 →
+输入消息 → 消息发送到数字员工(经 RPC 转发) →
+等待响应 → 显示 AI 回复 → 可继续对话 →
+可查看历史对话列表
 ```
 
-### 异常链路 C: VIP/Node ID 池耗尽
+### 异常链路
 
 ```
-设备注册 → 分配 VIP → VIP 池 (10.1.0.10~10.1.255.254) 已满
-→ 返回 503 {error: "VIP_POOL_EXHAUSTED"} → 告警运维
+设备 Token 无效: 输入 Token → RPC 连接失败 → 提示"Token 验证失败，请检查" → 不纳入托管
+设备额度超限: 添加设备 → 已达计划上限 → 提示"当前计划仅支持 N 台设备，请升级" → 阻止添加
+设备断线: 在线设备 → 心跳超时 → 状态变为 offline → Dashboard 在线率下降 → 设备页标橙色
+RPC 指令下发失败: 修改配置 → 设备 offline → 提示"设备离线，配置将在设备重新上线后同步"
+成员越权: 成员尝试访问 /admin/devices → 路由守卫拦截 → 重定向到成员工作台
+跨租户访问: 租户 A 请求租户 B 数据 → 数据层 tenantId 过滤 → 返回空/403
 ```
 
 ---
 
-## 场景矩阵
+## 3. 场景矩阵
 
-### 场景 1: 设备注册与网络分配
+### US-1: 租户接入与设备托管
 
-| # | 前置条件 | 用户动作 | 预期结果 | 边界/备注 | 优先级 |
-|---|----------|----------|----------|-----------|--------|
-| 1.1 | serial_no 已绑定 Tier 1 租户 | POST /register | 返回共享 Passcode + VIP (10.1.0.x) + node_id | Happy Path | P0 |
-| 1.2 | serial_no 已绑定 Tier 2 租户 | POST /register | 返回独立 Passcode + VIP (10.{tid}.0.x) + node_id | Happy Path | P0 |
-| 1.3 | serial_no 未绑定任何租户 | POST /register | 返回 403 DEVICE_NOT_BOUND | 异常 | P0 |
-| 1.4 | 同一 serial_no 重复注册（幂等） | POST /register ×2 | 返回相同配置，不重复分配 | 幂等性 | P0 |
-| 1.5 | Tier 1 VIP 池已满 (65024 个 IP 已分配) | POST /register | 返回 503 VIP_POOL_EXHAUSTED | 边界 | P1 |
-| 1.6 | Node ID 池已满 (2001~9999 共 7999 个) | POST /register | 返回 503 NODE_ID_EXHAUSTED | 边界 | P1 |
-| 1.7 | 并发：2 台设备同时注册同一租户 | POST /register ×2 并发 | VIP 和 Node ID 不冲突 | 并发安全 | P0 |
-| 1.8 | 请求缺少 serial_no 字段 | POST /register {} | 返回 400 INVALID_REQUEST | 参数校验 | P1 |
+| # | 前置条件 | 用户动作 | 预期结果 | 边界/备注 |
+|---|----------|----------|----------|-----------|
+| S1.1 | 新租户已注册 | 管理员登录进入管理后台 | 显示空设备列表 + 引导提示 | Happy Path |
+| S1.2 | 管理员在设备管理页 | 点击"添加设备"，输入有效 Token + 端点 | RPC 验证通过，设备出现在列表中(status=online) | Happy Path |
+| S1.3 | 管理员在设备管理页 | 输入无效 Token | 页面提示"Token 验证失败" | 异常：无效凭证 |
+| S1.4 | 已托管 3 台设备，基础版计划 | 尝试添加第 4 台设备 | 提示"已达基础版 3 台设备上限，请升级" | 边界：配额限制 |
+| S1.5 | 设备已上线 | 设备心跳超时 | 设备状态自动变为 offline | 异常：断线 |
+| S1.6 | 管理员在设备详情 | 点击"解除托管" | 确认弹窗 → 确认后设备从列表移除 | Happy Path |
+| S1.7 | 已有设备 | 查看设备列表 | 显示设备名、客户、端点、状态、代理数，可按状态筛选 | 现有功能保留 |
 
-### 场景 2: Tier 分级与网络隔离
+### US-2: 设备参数远程配置
 
-| # | 前置条件 | 用户动作 | 预期结果 | 边界/备注 | 优先级 |
-|---|----------|----------|----------|-----------|--------|
-| 2.1 | 2 台 Tier 1 设备分属不同租户 | 设备 A ping 设备 B VIP | iptables 丢包，连接失败 | 核心隔离验证 | P0 |
-| 2.2 | Tier 1 设备 A | 设备 A ping SaaS VIP (10.1.0.1) | 成功 | 白名单通过 | P0 |
-| 2.3 | Tier 2 租户 C 的设备 | SaaS 发请求到设备 VIP | 通过独立网络送达 | 独立 Passcode 隔离 | P0 |
-| 2.4 | Tier 2 租户 C 和 D | 租户 C 设备尝试访问租户 D 网段 | 不可达 (不同 Passcode) | 彻底隔离 | P0 |
+| # | 前置条件 | 用户动作 | 预期结果 | 边界/备注 |
+|---|----------|----------|----------|-----------|
+| S2.1 | 设备 online | 进入设备配置页 | 显示当前模型提供商、API Key(脱敏)、温度、Prompt、插件列表 | Happy Path |
+| S2.2 | 在设备配置页 | 切换模型提供商为"OpenAI" | 下拉列表切换，API Key 字段清空等待输入 | Happy Path |
+| S2.3 | 在设备配置页 | 输入 API Key | 字段脱敏显示(首6尾4) | 安全：脱敏 |
+| S2.4 | 在设备配置页 | 拖动温度滑块到 0.8 | 滑块实时联动数值显示 | Happy Path |
+| S2.5 | 在设备配置页 | 编辑系统 Prompt 文本域 | 大文本编辑器，支持多行 | Happy Path |
+| S2.6 | 在设备配置页 | 点击"联网搜索"插件开关 | 开关切换，标记为待同步 | Happy Path |
+| S2.7 | 修改了多项配置 | 点击"保存配置" | 翻译为 RPC 指令下发，Toast 提示"配置已同步" | Happy Path |
+| S2.8 | 设备 offline | 点击"保存配置" | 提示"设备离线，配置将在重新上线后同步"，配置保存为 pending | 异常：离线 |
+| S2.9 | 在设备配置页 | 不修改任何字段，点击"保存" | 按钮 disabled 或提示"无变更" | 边界：空操作 |
+| S2.10 | API Key 字段 | 留空并保存 | 表单校验提示"API Key 不能为空" | 边界：必填 |
 
-### 场景 3: SaaS 远程管理
+### US-3: 数字员工角色定义与分配
 
-| # | 前置条件 | 用户动作 | 预期结果 | 边界/备注 | 优先级 |
-|---|----------|----------|----------|-----------|--------|
-| 3.1 | 设备在线 | POST config.patch | 200 OK，配置生效 | Happy Path | P0 |
-| 3.2 | 设备离线 | POST config.patch | 入队 PENDING → 设备上线后补发 | 最终一致性 | P0 |
-| 3.3 | 设备离线超 24h | Worker 重试 48 次 | status = FAILED + 告警 | 超时处理 | P1 |
-| 3.4 | 同一设备多条指令积压 | 设备上线 | 按时间顺序依次执行 | 顺序保证 | P1 |
+| # | 前置条件 | 用户动作 | 预期结果 | 边界/备注 |
+|---|----------|----------|----------|-----------|
+| S3.1 | 管理员在数字员工管理页 | 查看列表 | 显示所有已定义的数字员工（角色名、绑定设备、分配成员数） | Happy Path |
+| S3.2 | 管理员在数字员工管理页 | 点击"创建数字员工" | 弹出创建表单：角色名、描述、绑定设备(下拉)、系统 Prompt、插件选择 | Happy Path |
+| S3.3 | 在创建表单 | 填写完整信息并保存 | 数字员工创建成功，出现在列表中 | Happy Path |
+| S3.4 | 在创建表单 | 角色名留空 | 表单校验提示"角色名不能为空" | 边界：必填 |
+| S3.5 | 在创建表单 | 未选择绑定设备 | 表单校验提示"必须绑定至少一台设备" | 边界：必填 |
+| S3.6 | 管理员在数字员工详情 | 点击"分配成员" | 显示成员列表多选，勾选后保存 | Happy Path |
+| S3.7 | 数字员工已分配给成员 | 取消某成员的分配 | 该成员端立即丢失对该数字员工的访问 | Happy Path |
+| S3.8 | 管理员 | 编辑已有数字员工 | 表单回显数据，修改后保存 | Happy Path |
+| S3.9 | 数字员工正在被成员使用 | 解绑其绑定设备 | 提示"该员工正被使用，确认解绑？"，确认后成员端该员工变为不可用 | 边界：使用中变更 |
 
-### 场景 4: 租户 Tier 升级迁移
+### US-4: 团队成员使用界面
 
-| # | 前置条件 | 用户动作 | 预期结果 | 边界/备注 | 优先级 |
-|---|----------|----------|----------|-----------|--------|
-| 4.1 | Tier 1 租户有 3 台设备 | PUT /tenants/{id}/upgrade | 生成独立网络 → 3 台设备全部迁移 | Happy Path | P0 |
-| 4.2 | 迁移过程中 1 台设备离线 | 触发升级 | 在线设备立即迁移，离线设备标记 PENDING_MIGRATION，上线后自动完成 | 部分在线 | P0 |
-| 4.3 | 已经是 Tier 2 的租户 | PUT /upgrade | 返回 409 ALREADY_TIER_2 | 幂等 | P1 |
-| 4.4 | 迁移过程中新设备注册 | POST /register | 使用新的 Tier 2 配置 | 并发安全 | P1 |
+| # | 前置条件 | 用户动作 | 预期结果 | 边界/备注 |
+|---|----------|----------|----------|-----------|
+| S4.1 | 成员登录 | 查看工作台 | 仅显示被分配的数字员工卡片列表 | Happy Path |
+| S4.2 | 成员有 2 个数字员工 | 点击"程序员"卡片 | 进入对话界面，顶部显示角色名和描述 | Happy Path |
+| S4.3 | 在对话界面 | 输入消息并发送 | 消息出现在对话区，等待 AI 回复，AI 回复后渲染 | Happy Path |
+| S4.4 | 有历史对话 | 查看对话历史列表 | 按时间倒序显示历史对话标题/摘要 | Happy Path |
+| S4.5 | 成员登录 | 尝试手动导航到 /admin/devices | 路由守卫拦截，重定向到成员工作台 | 安全：越权 |
+| S4.6 | 成员界面 | 检查页面元素 | 无任何配置入口 — 无 Token、无 Prompt 编辑、无模型参数 | 安全：隐藏 |
+| S4.7 | 无分配的数字员工 | 成员登录 | 显示空状态"暂无分配的数字员工，请联系管理员" | 边界：空列表 |
+| S4.8 | 数字员工绑定的设备 offline | 成员点击该员工 | 提示"当前员工不可用(设备离线)"，禁止发送消息 | 异常：设备离线 |
 
-### 场景 5: GNB 容器生命周期 (Tier 2)
+### US-5: RBAC 三层权限体系
 
-| # | 前置条件 | 用户动作 | 预期结果 | 边界/备注 | 优先级 |
-|---|----------|----------|----------|-----------|--------|
-| 5.1 | 创建 Tier 2 租户 | 自动触发 | Docker 启动 GNB 容器 + TUN 设备正常 | Happy Path | P0 |
-| 5.2 | 容器异常退出 | Docker 监控 | 自动重启 (restart: always) + 告警 | 容错 | P1 |
-| 5.3 | 租户删除 | DELETE /tenants/{id} | 停止+删除容器 → 回收 Passcode + 网段 | 资源回收 | P1 |
+| # | 前置条件 | 用户动作 | 预期结果 | 边界/备注 |
+|---|----------|----------|----------|-----------|
+| S5.1 | 管理员登录 | 访问设备管理/成员管理/数字员工管理 | 全部可访问，可执行 CRUD | Happy Path |
+| S5.2 | 成员登录 | 访问 /admin/* 任意管理页 | 被拦截，重定向到 /workspace | 安全：权限隔离 |
+| S5.3 | 成员登录 | 通过 API 请求管理接口 | 返回 403 Forbidden | 安全：接口级拦截(模拟) |
+| S5.4 | 租户 A 管理员 | 请求租户 B 的设备数据 | 数据层 tenantId 过滤，返回空集 | 安全：跨租户隔离 |
+| S5.5 | 管理员创建新成员 | 设置成员角色为 member | 成员仅获得 member 级权限 | Happy Path |
+| S5.6 | 管理员 | 查看成员列表 | 仅显示本租户下的成员 | 安全：租户隔离 |
+
+### US-6: Dashboard 改造
+
+| # | 前置条件 | 用户动作 | 预期结果 | 边界/备注 |
+|---|----------|----------|----------|-----------|
+| S6.1 | 管理员登录 | 进入 Dashboard | 显示 4 张统计卡片：托管设备数、在线设备、团队成员、活跃数字员工 | Happy Path |
+| S6.2 | 在 Dashboard | 查看活动日志 | 显示最近操作记录（设备添加/配置变更/成员变动/对话统计） | Happy Path |
+| S6.3 | 在 Dashboard | 查看订阅信息 | 显示当前计划(基础/专业/企业)、已用/可用节点数、到期时间 | Happy Path |
+| S6.4 | 基础版，已用 3/3 节点 | 查看 Dashboard | 节点使用量显示为红色警告 | 边界：配额满 |
 
 ---
 
-## 边界条件清单
+## 4. 边界条件清单
 
 | # | 条件 | 预期行为 | 优先级 |
 |---|------|----------|--------|
-| B1 | **并发注册**：多台设备同时 POST /register | VIP + Node ID 分配原子性，无冲突 | P0 |
-| B2 | **Passcode 冲突**：随机生成的 Passcode 与已有网络重复 | 重试生成直到唯一（概率 < 1/4.2B） | P1 |
-| B3 | **Tier 1 网段耗尽**：10.1.0.10~10.1.255.254 (65024 IP 全满) | 拒绝注册 + 告警运维扩段 | P1 |
-| B4 | **设备反复上下线**：1 分钟内重连 10 次 | 心跳去抖 (60s 内不重复触发补发) | P1 |
-| B5 | **SaaS 端 GNB 容器启动失败**：端口/TUN 冲突 | 标记租户 DEGRADED + 告警 + 阻止设备注册 | P0 |
-| B6 | **设备 provision 期间断网** | 脚本重试 3 次 → 写入 ERROR.log → cron 5min 重试 | P1 |
-| B7 | **指令队列 Redis 宕机** | 降级：配置直写 DB，Worker 定时扫 DB 兜底 | P2 |
-| B8 | **Tier 升级回滚**：迁移失败需要回退到 Tier 1 | 保留旧配置快照，支持回滚 | P2 |
+| B1 | 设备配额超限 | 阻止添加 + 升级提示 + 按钮 disabled | P0 |
+| B2 | Token 格式校验 | 前端基础格式检查（非空、最小长度） | P0 |
+| B3 | 端点格式校验 | 必须以 `ws://` 或 `wss://` 开头 | P0 |
+| B4 | 设备离线时配置下发 | 配置保存为 pending，设备上线后自动同步 | P1 |
+| B5 | API Key 脱敏 | 存储原文，展示时仅显示首 6 尾 4 | P0 |
+| B6 | 温度值范围 | 0.0 ~ 2.0，步进 0.1，超出范围拒绝 | P1 |
+| B7 | Max Tokens 范围 | 1 ~ 128000，非数字输入拒绝 | P1 |
+| B8 | 系统 Prompt 长度 | 最大 10000 字符，超出截断提示 | P2 |
+| B9 | 数字员工无绑定设备 | 状态标记为"未配置"，成员端不显示 | P1 |
+| B10 | 成员被删除 | 相关分配关系自动清理 | P1 |
+| B11 | 设备被移除 | 绑定的数字员工标记为"设备已移除"，成员端不可用 | P0 |
+| B12 | 跨租户数据请求 | 数据层 tenantId 强制过滤，不返回非本租户数据 | P0 |
+| B13 | 对话中设备突然 offline | 提示"连接中断"，消息保留，支持重连 | P1 |
+| B14 | 空租户（无设备无成员） | Dashboard 显示引导式空状态 | P2 |
+| B15 | 并发配置修改 | 最后一次保存生效（Last-Write-Wins），Mock 层简化处理 | P2 |
 
 ---
 
-## 需求覆盖映射
+## 5. 需求覆盖映射
 
-| AC 编号 | AC 内容 | 覆盖场景 | 状态 |
-|---------|---------|----------|------|
-| AC-1 | Tier 1 注册返回共享 Passcode + VIP + node_id | 1.1, 1.4, 1.7 | ✅ 已覆盖 |
-| AC-2 | Tier 2 创建独立 Passcode + 网段 + 容器 | 1.2, 5.1 | ✅ 已覆盖 |
-| AC-3 | Tier 1 设备间 iptables 隔离 | 2.1, 2.2 | ✅ 已覆盖 |
-| AC-4 | 设备 provision 全自动注册+启动 | 1.1, 1.2 + 主链路 1 | ✅ 已覆盖 |
-| AC-5 | Tier 1→2 在线迁移 | 4.1, 4.2, 4.3, 4.4 | ✅ 已覆盖 |
-| AC-6 | GNB VIP 访问 OpenClaw API | 3.1 + 主链路 2 | ✅ 已覆盖 |
-| AC-7 | 离线重连后指令补发 | 3.2, 3.3, 3.4 + 异常链路 A | ✅ 已覆盖 |
+| AC | 覆盖场景 | 覆盖度 |
+|----|---------|--------|
+| AC-1.1 | S1.1, S5.4, S5.6, B12 | ✅ |
+| AC-1.2 | S1.2, S1.3 | ✅ |
+| AC-1.3 | S1.2, S1.5, S1.7 | ✅ |
+| AC-1.4 | S1.4, B1 | ✅ |
+| AC-2.1 | S2.2, S2.3, B5 | ✅ |
+| AC-2.2 | S2.4, B6, B7 | ✅ |
+| AC-2.3 | S2.5, B8 | ✅ |
+| AC-2.4 | S2.6 | ✅ |
+| AC-2.5 | S2.7, S2.8 | ✅ |
+| AC-3.1 | S3.1, S3.2, S3.3 | ✅ |
+| AC-3.2 | S3.2, S3.3, S3.4, S3.5 | ✅ |
+| AC-3.3 | S5.5 | ✅ |
+| AC-3.4 | S3.6, S3.7 | ✅ |
+| AC-3.5 | S3.7 | ✅ |
+| AC-4.1 | S4.1, S4.7 | ✅ |
+| AC-4.2 | S4.2, S4.3 | ✅ |
+| AC-4.3 | S4.4 | ✅ |
+| AC-4.4 | S4.5, S4.6 | ✅ |
+| AC-4.5 | S4.1, S5.4 | ✅ |
+| AC-5.1 | S5.1 | ✅ |
+| AC-5.2 | S5.2, S4.1 | ✅ |
+| AC-5.3 | S5.2, S5.3 | ✅ |
+| AC-5.4 | S5.4, B12 | ✅ |
+| AC-6.1 | S6.1 | ✅ |
+| AC-6.2 | S6.1, S1.7 | ✅ |
+| AC-6.3 | S6.2 | ✅ |
+| AC-6.4 | S6.3, S6.4 | ✅ |
+
+> 全部 26 条 AC 均已覆盖 ✅
 
 ---
 
-## 技术风险清单 (L 级 Spike 建议)
+## 6. Alpha TDD 建议
 
-| # | 风险领域 | 调研范围 | 时间盒 |
-|---|----------|----------|--------|
-| R1 | **GNB 多实例共存** | SaaS 单服务器运行 N 个 GNB 进程（不同 Passcode），验证 TUN 设备命名冲突和路由表冲突 | 2h |
-| R2 | **macOS TUN 权限** | Mac mini 边缘设备上 GNB 需 root/sudo 创建 TUN，验证无交互方式和 launchd 集成 | 1h |
-| R3 | **ISP UDP 打洞** | 典型企业 NAT 环境下打洞成功率测试，验证 TCP Forward 备选方案 | 1h |
+### 测试分组结构
+
+```
+describe('多租户数据模型')
+  it('Tenant 创建后 tenantId 自动生成')
+  it('Member 创建时必须绑定 tenantId')
+  it('跨租户查询返回空集')
+
+describe('设备托管')
+  it('有效 Token + 端点 → 设备注册成功')
+  it('无效 Token → 返回验证失败')
+  it('超过配额 → 阻止添加并返回限额信息')
+  it('解除托管 → 设备从列表移除')
+  it('设备移除 → 关联数字员工标记不可用')
+
+describe('RPC 配置')
+  it('GUI 表单操作 → 翻译为正确的 RPC 指令格式')
+  it('修改 API Key → 脱敏存储')
+  it('温度范围校验 0.0~2.0')
+  it('设备 offline → 配置标记为 pending')
+  it('无变更 → 不生成 RPC 指令')
+
+describe('数字员工管理')
+  it('创建数字员工 → 设备绑定')
+  it('角色名为空 → 校验失败')
+  it('未选设备 → 校验失败')
+  it('分配成员 → 成员 assignedWorkerIds 更新')
+  it('取消分配 → 成员即时丢失访问')
+
+describe('成员使用界面')
+  it('成员仅看到已分配的数字员工')
+  it('进入对话 → 消息发送和接收')
+  it('无分配员工 → 空状态提示')
+  it('设备 offline → 员工不可用提示')
+
+describe('RBAC 权限')
+  it('admin 角色 → 可访问全部管理页')
+  it('member 角色 → 管理页重定向到 /workspace')
+  it('跨租户请求 → 数据层返回空')
+
+describe('Dashboard')
+  it('统计卡片正确计数')
+  it('活动日志按时间倒序')
+  it('配额满 → 红色警告')
+```
 
 ---
 
-## Alpha TDD 建议
+## 7. 技术风险清单 (L 级)
 
-1. **`describe('PasscodeManager')`**: 覆盖场景 1.1-1.8 + B1-B3
-   - `it('为 Tier 1 分配共享 Passcode + 唯一 VIP')` → 1.1
-   - `it('为 Tier 2 生成独立 Passcode + 独立网段')` → 1.2
-   - `it('未绑定设备返回 403')` → 1.3
-   - `it('重复注册幂等返回相同配置')` → 1.4
-   - `it('并发注册不冲突')` → 1.7, B1
+| # | 风险 | 影响 | 建议 |
+|---|------|------|------|
+| R1 | 多租户数据隔离 | 所有查询函数需注入 tenantId 过滤，改造工作量大 | Alpha Spike：评估现有 Mock 层改造范围 |
+| R2 | RPC 指令翻译中间件 | 需定义完整的 RPC 协议格式和指令映射表 | Alpha Spike：先定义 RPC 消息格式 JSON Schema |
+| R3 | 双角色路由系统 | admin vs member 两套路由 + 权限守卫 | Alpha 优先验证 react-router-dom v7 的嵌套路由 + 守卫模式 |
+| R4 | 对话界面实时通信 | 即便是 Mock，也需要模拟异步消息流 | Mock 层使用 setTimeout 模拟回复延迟 |
+| R5 | 现有模块兼容性 | 产品/客户/订单/开发者模块需保留并与新体系共存 | 渐进改造，不删除现有模块 |
 
-2. **`describe('TierEngine')`**: 覆盖场景 2.1-2.4 + 4.1-4.4
-   - `it('Tier 判定基于设备数和付费状态')` → 2.x
-   - `it('Tier 升级生成独立网络并迁移设备')` → 4.1
-   - `it('离线设备升级后上线自动迁移')` → 4.2
+---
 
-3. **`describe('GnbContainerManager')`**: 覆盖场景 5.1-5.3
-   - `it('创建 Tier 2 租户时启动容器')` → 5.1
-   - `it('租户删除时清理容器')` → 5.3
+## 8. Spike 建议
 
-4. **`describe('CommandDispatcher')`**: 覆盖场景 3.1-3.4 + B4, B7
-   - `it('在线设备直接推送成功')` → 3.1
-   - `it('离线设备入队重试')` → 3.2
-   - `it('超时标记 FAILED')` → 3.3
-
-5. **`describe('DeviceProvisioning')`**: 覆盖场景 1.1-1.2 端到端 + B6
-   - `it('provision.sh 完整流程')` → 集成测试
+| 主题 | 范围 | 时间盒 |
+|------|------|--------|
+| 多租户 Mock 数据架构 | 验证 tenantId 注入方式：全局 Context vs 函数参数 | 短 |
+| RPC 指令协议格式 | 定义 `RpcCommand` JSON Schema + 常见指令枚举 | 短 |
+| 双角色路由守卫 | react-router-dom v7 中实现 admin/member 路由分流 + 重定向 | 短 |
+| 对话组件原型 | 实现一个 Mock 聊天组件（消息列表 + 输入框 + 模拟回复） | 中 |

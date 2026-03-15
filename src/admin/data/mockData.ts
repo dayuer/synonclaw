@@ -3,12 +3,33 @@
 import type {
   Product, Customer, Order, Developer, Device,
   StatCard, SystemInfo, OrderStatus, CertLevel,
-  ORDER_STATUS_FLOW as _FLOW
+  Tenant, TenantMember, DigitalWorker, ActivityLog,
+  Conversation, ChatMessage, RpcConfig,
 } from './types'
-import { ORDER_STATUS_FLOW } from './types'
+import {
+  ORDER_STATUS_FLOW, PLAN_LIMITS, DEFAULT_RPC_CONFIG,
+} from './types'
 
 // ============================================
-// 模拟数据
+// 默认租户
+// ============================================
+
+// @alpha: 单租户 Mock — 所有数据归属此租户
+const DEFAULT_TENANT_ID = 't1'
+
+const tenant: Tenant = {
+  id: DEFAULT_TENANT_ID,
+  name: '深圳腾飞科技有限公司',
+  plan: 'pro',
+  maxDevices: PLAN_LIMITS.pro,
+  createdAt: '2026-01-01',
+}
+
+export const getTenant = (): Tenant => ({ ...tenant })
+export const getDefaultTenantId = (): string => DEFAULT_TENANT_ID
+
+// ============================================
+// 产品数据（保留）
 // ============================================
 
 let products: Product[] = [
@@ -42,6 +63,10 @@ let products: Product[] = [
   },
 ]
 
+// ============================================
+// 客户数据（保留）
+// ============================================
+
 let customers: Customer[] = [
   {
     id: 'c1', name: '深圳腾飞科技有限公司', contact: '张伟',
@@ -74,6 +99,10 @@ let customers: Customer[] = [
     deviceCount: 0, industry: '医疗健康', createdAt: '2026-03-01',
   },
 ]
+
+// ============================================
+// 订单数据（保留）
+// ============================================
 
 let orders: Order[] = [
   {
@@ -134,6 +163,10 @@ let orders: Order[] = [
   },
 ]
 
+// ============================================
+// 开发者数据（保留）
+// ============================================
+
 let developers: Developer[] = [
   {
     id: 'd1', name: '林浩', school: '浙江大学',
@@ -190,48 +223,168 @@ let developers: Developer[] = [
   },
 ]
 
-// @alpha: 设备列表 — 每台设备 = 一个 OpenClaw 实例
+// ============================================
+// 设备数据（扩展：增加 tenantId + rpcConfig）
+// ============================================
+
+// @alpha: 设备 RPC 配置工厂
+const makeRpcConfig = (overrides: Partial<RpcConfig> = {}): RpcConfig => ({
+  ...DEFAULT_RPC_CONFIG,
+  plugins: DEFAULT_RPC_CONFIG.plugins.map(p => ({ ...p })),
+  ...overrides,
+})
+
 let devices: Device[] = [
   {
-    id: 'dev1', name: 'TF-RACK-01', customerId: 'c1', customerName: '深圳腾飞科技有限公司',
+    id: 'dev1', tenantId: DEFAULT_TENANT_ID, name: 'TF-RACK-01',
+    customerId: 'c1', customerName: '深圳腾飞科技有限公司',
     productName: 'SynonClaw Rack X1', token: 'oc_tf_****a3f8',
     endpoint: 'ws://10.0.1.10:3002', status: 'online', agentCount: 6,
     uptime: '28 天 12 小时', lastSeen: '2026-03-15 22:00', registeredAt: '2026-02-05',
+    rpcConfig: makeRpcConfig({ modelProvider: 'openai', apiKey: 'sk-proj-****abcd', temperature: 0.7, systemPrompt: '你是腾飞科技的 AI 助手。' }),
   },
   {
-    id: 'dev2', name: 'TF-RACK-02', customerId: 'c1', customerName: '深圳腾飞科技有限公司',
+    id: 'dev2', tenantId: DEFAULT_TENANT_ID, name: 'TF-RACK-02',
+    customerId: 'c1', customerName: '深圳腾飞科技有限公司',
     productName: 'SynonClaw Rack X1', token: 'oc_tf_****b7e2',
     endpoint: 'ws://10.0.1.11:3002', status: 'online', agentCount: 4,
     uptime: '28 天 12 小时', lastSeen: '2026-03-15 22:00', registeredAt: '2026-02-05',
+    rpcConfig: makeRpcConfig({ modelProvider: 'anthropic', apiKey: 'sk-ant-****efgh', temperature: 0.5 }),
   },
   {
-    id: 'dev3', name: 'YQ-RACK-01', customerId: 'c2', customerName: '杭州云启信息技术公司',
+    id: 'dev3', tenantId: DEFAULT_TENANT_ID, name: 'YQ-RACK-01',
+    customerId: 'c2', customerName: '杭州云启信息技术公司',
     productName: 'SynonClaw Rack X1', token: 'oc_yq_****c1d9',
     endpoint: 'ws://172.16.0.50:3002', status: 'online', agentCount: 3,
     uptime: '15 天 6 小时', lastSeen: '2026-03-15 21:55', registeredAt: '2026-02-18',
+    rpcConfig: makeRpcConfig({ modelProvider: 'deepseek', apiKey: 'sk-ds-****ijkl' }),
   },
   {
-    id: 'dev4', name: 'XM-DESK-01', customerId: 'c4', customerName: '王小明工作室',
+    id: 'dev4', tenantId: DEFAULT_TENANT_ID, name: 'XM-DESK-01',
+    customerId: 'c4', customerName: '王小明工作室',
     productName: 'SynonClaw Desk Pro', token: 'oc_xm_****d4f0',
     endpoint: 'ws://192.168.1.100:3002', status: 'online', agentCount: 2,
     uptime: '10 天 3 小时', lastSeen: '2026-03-15 21:50', registeredAt: '2026-03-01',
+    rpcConfig: makeRpcConfig({ modelProvider: 'openai', apiKey: 'sk-proj-****mnop' }),
   },
   {
-    id: 'dev5', name: 'XM-DESK-02', customerId: 'c4', customerName: '王小明工作室',
+    id: 'dev5', tenantId: DEFAULT_TENANT_ID, name: 'XM-DESK-02',
+    customerId: 'c4', customerName: '王小明工作室',
     productName: 'SynonClaw Desk Pro', token: 'oc_xm_****e5a1',
     endpoint: 'ws://192.168.1.101:3002', status: 'offline', agentCount: 0,
     uptime: '—', lastSeen: '2026-03-14 18:30', registeredAt: '2026-03-01',
+    rpcConfig: makeRpcConfig(),
   },
   {
-    id: 'dev6', name: 'TF-DESK-01', customerId: 'c1', customerName: '深圳腾飞科技有限公司',
+    id: 'dev6', tenantId: DEFAULT_TENANT_ID, name: 'TF-DESK-01',
+    customerId: 'c1', customerName: '深圳腾飞科技有限公司',
     productName: 'SynonClaw Desk Lite', token: 'oc_tf_****f6b2',
     endpoint: 'ws://10.0.2.20:3002', status: 'error', agentCount: 0,
     uptime: '—', lastSeen: '2026-03-15 08:12', registeredAt: '2026-02-20',
+    rpcConfig: makeRpcConfig(),
   },
 ]
 
+// ============================================
+// 租户成员数据（新增）
+// ============================================
+
+let members: TenantMember[] = [
+  {
+    id: 'm1', tenantId: DEFAULT_TENANT_ID, name: '张伟', email: 'zhang@tengfei.com',
+    department: '技术部', role: 'admin', assignedWorkerIds: [], createdAt: '2026-01-01',
+  },
+  {
+    id: 'm2', tenantId: DEFAULT_TENANT_ID, name: '李明', email: 'liming@tengfei.com',
+    department: '研发部', role: 'member', assignedWorkerIds: ['w1', 'w2'], createdAt: '2026-01-15',
+  },
+  {
+    id: 'm3', tenantId: DEFAULT_TENANT_ID, name: '王芳', email: 'wangfang@tengfei.com',
+    department: '财务部', role: 'member', assignedWorkerIds: ['w3'], createdAt: '2026-02-01',
+  },
+  {
+    id: 'm4', tenantId: DEFAULT_TENANT_ID, name: '刘洋', email: 'liuyang@tengfei.com',
+    department: '产品部', role: 'member', assignedWorkerIds: ['w1'], createdAt: '2026-02-10',
+  },
+]
+
+// ============================================
+// 数字员工数据（新增）
+// ============================================
+
+let digitalWorkers: DigitalWorker[] = [
+  {
+    id: 'w1', tenantId: DEFAULT_TENANT_ID, name: '代码助手',
+    description: '精通多种编程语言的全栈开发助手，擅长代码审查、重构和架构设计。',
+    deviceId: 'dev1', deviceName: 'TF-RACK-01',
+    systemPrompt: '你是一位资深全栈开发工程师，精通 TypeScript、Python、Go。专注于代码质量、性能优化和最佳实践。',
+    plugins: ['web_search', 'code_exec', 'file_mgmt'],
+    assignedMemberIds: ['m2', 'm4'], status: 'active', createdAt: '2026-02-10',
+  },
+  {
+    id: 'w2', tenantId: DEFAULT_TENANT_ID, name: '数据分析师',
+    description: '擅长数据处理、统计分析和可视化的 AI 分析师。',
+    deviceId: 'dev2', deviceName: 'TF-RACK-02',
+    systemPrompt: '你是一位数据分析专家，精通 SQL、Python、Excel。擅长数据清洗、统计分析和业务洞察。',
+    plugins: ['code_exec', 'file_mgmt'],
+    assignedMemberIds: ['m2'], status: 'active', createdAt: '2026-02-15',
+  },
+  {
+    id: 'w3', tenantId: DEFAULT_TENANT_ID, name: '财务助手',
+    description: '协助处理日常财务工作，包括报表生成、预算分析和报销审核。',
+    deviceId: 'dev3', deviceName: 'YQ-RACK-01',
+    systemPrompt: '你是一位专业的财务助手，精通中国企业财务制度和会计准则。帮助处理报表、预算和审计工作。',
+    plugins: ['file_mgmt', 'calendar'],
+    assignedMemberIds: ['m3'], status: 'active', createdAt: '2026-02-20',
+  },
+]
+
+// ============================================
+// 活动日志数据（新增）
+// ============================================
+
+let activityLogs: ActivityLog[] = [
+  { id: 'al1', tenantId: DEFAULT_TENANT_ID, type: 'device_added', message: '设备 TF-RACK-01 已接入托管', timestamp: '2026-02-05 10:00' },
+  { id: 'al2', tenantId: DEFAULT_TENANT_ID, type: 'device_added', message: '设备 TF-RACK-02 已接入托管', timestamp: '2026-02-05 10:30' },
+  { id: 'al3', tenantId: DEFAULT_TENANT_ID, type: 'worker_created', message: '数字员工「代码助手」已创建', timestamp: '2026-02-10 14:00' },
+  { id: 'al4', tenantId: DEFAULT_TENANT_ID, type: 'member_added', message: '成员 李明 已加入团队', timestamp: '2026-01-15 09:00' },
+  { id: 'al5', tenantId: DEFAULT_TENANT_ID, type: 'config_changed', message: 'TF-RACK-01 模型切换为 OpenAI GPT-4', timestamp: '2026-03-10 16:00' },
+  { id: 'al6', tenantId: DEFAULT_TENANT_ID, type: 'conversation', message: '李明 与「代码助手」完成 3 轮对话', timestamp: '2026-03-15 11:00' },
+]
+
+// ============================================
+// 对话数据（新增）
+// ============================================
+
+let conversations: Conversation[] = [
+  {
+    id: 'conv1', tenantId: DEFAULT_TENANT_ID,
+    memberId: 'm2', workerId: 'w1', workerName: '代码助手',
+    messages: [
+      { id: 'msg1', role: 'user', content: '帮我审查一下这段 TypeScript 代码的类型安全性', timestamp: '2026-03-15 10:30' },
+      { id: 'msg2', role: 'assistant', content: '好的，请把代码发给我，我会从类型推断、泛型使用和潜在的 any 类型逃逸入口三个维度进行审查。', timestamp: '2026-03-15 10:31' },
+    ],
+    createdAt: '2026-03-15 10:30', updatedAt: '2026-03-15 10:31',
+  },
+  {
+    id: 'conv2', tenantId: DEFAULT_TENANT_ID,
+    memberId: 'm3', workerId: 'w3', workerName: '财务助手',
+    messages: [
+      { id: 'msg3', role: 'user', content: '帮我生成本月的部门预算报表', timestamp: '2026-03-14 09:00' },
+      { id: 'msg4', role: 'assistant', content: '收到。我将根据上月数据和本月预算目标为您生成预算报表。请确认需要包含哪些部门？', timestamp: '2026-03-14 09:01' },
+      { id: 'msg5', role: 'user', content: '所有部门都要', timestamp: '2026-03-14 09:02' },
+      { id: 'msg6', role: 'assistant', content: '好的，正在生成全部门预算报表，预计 2 分钟完成。', timestamp: '2026-03-14 09:02' },
+    ],
+    createdAt: '2026-03-14 09:00', updatedAt: '2026-03-14 09:02',
+  },
+]
+
+// ============================================
+// 系统信息
+// ============================================
+
 const systemInfo: SystemInfo = {
-  version: '1.2.0-beta',
+  version: '2.0.0-beta',
   environment: 'Production',
   buildTime: '2026-03-15 10:00:00',
   nodeCount: devices.length,
@@ -242,7 +395,7 @@ const systemInfo: SystemInfo = {
 }
 
 // ============================================
-// 查询函数
+// 查询函数 — 产品/客户/订单/开发者（保留）
 // ============================================
 
 export const getProducts = (): Product[] => [...products]
@@ -260,25 +413,107 @@ export const getRecentOrders = (count: number): Order[] =>
 export const getDevelopers = (): Developer[] => [...developers]
 export const getDeveloperById = (id: string): Developer | undefined => developers.find(d => d.id === id)
 
-export const getDevices = (): Device[] => [...devices]
-export const getDeviceById = (id: string): Device | undefined => devices.find(d => d.id === id)
-export const getDevicesByCustomerId = (cid: string): Device[] => devices.filter(d => d.customerId === cid)
+// ============================================
+// 查询函数 — 设备（扩展 tenantId 过滤）
+// ============================================
+
+export const getDevices = (tenantId: string = DEFAULT_TENANT_ID): Device[] =>
+  devices.filter(d => d.tenantId === tenantId).map(d => ({ ...d }))
+
+export const getDeviceById = (id: string): Device | undefined => {
+  const d = devices.find(d => d.id === id)
+  return d ? { ...d } : undefined
+}
+
+export const getDevicesByCustomerId = (cid: string): Device[] =>
+  devices.filter(d => d.customerId === cid).map(d => ({ ...d }))
+
+export const getDeviceCount = (tenantId: string = DEFAULT_TENANT_ID): number =>
+  devices.filter(d => d.tenantId === tenantId).length
+
+// ============================================
+// 查询函数 — 成员
+// ============================================
+
+export const getMembers = (tenantId: string = DEFAULT_TENANT_ID): TenantMember[] =>
+  members.filter(m => m.tenantId === tenantId).map(m => ({ ...m, assignedWorkerIds: [...m.assignedWorkerIds] }))
+
+export const getMemberById = (id: string): TenantMember | undefined => {
+  const m = members.find(m => m.id === id)
+  return m ? { ...m, assignedWorkerIds: [...m.assignedWorkerIds] } : undefined
+}
+
+// ============================================
+// 查询函数 — 数字员工
+// ============================================
+
+export const getDigitalWorkers = (tenantId: string = DEFAULT_TENANT_ID): DigitalWorker[] =>
+  digitalWorkers.filter(w => w.tenantId === tenantId).map(w => ({ ...w, plugins: [...w.plugins], assignedMemberIds: [...w.assignedMemberIds] }))
+
+export const getDigitalWorkerById = (id: string): DigitalWorker | undefined => {
+  const w = digitalWorkers.find(w => w.id === id)
+  return w ? { ...w, plugins: [...w.plugins], assignedMemberIds: [...w.assignedMemberIds] } : undefined
+}
+
+export const getWorkersByMemberId = (memberId: string): DigitalWorker[] => {
+  const member = members.find(m => m.id === memberId)
+  if (!member) return []
+  return digitalWorkers
+    .filter(w => member.assignedWorkerIds.includes(w.id))
+    .map(w => ({ ...w, plugins: [...w.plugins], assignedMemberIds: [...w.assignedMemberIds] }))
+}
+
+// ============================================
+// 查询函数 — 活动日志
+// ============================================
+
+export const getActivityLogs = (tenantId: string = DEFAULT_TENANT_ID, count: number = 10): ActivityLog[] =>
+  [...activityLogs]
+    .filter(l => l.tenantId === tenantId)
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+    .slice(0, count)
+
+// ============================================
+// 查询函数 — 对话
+// ============================================
+
+export const getConversations = (memberId: string): Conversation[] =>
+  conversations
+    .filter(c => c.memberId === memberId)
+    .map(c => ({ ...c, messages: c.messages.map(m => ({ ...m })) }))
+
+export const getConversationById = (id: string): Conversation | undefined => {
+  const c = conversations.find(c => c.id === id)
+  return c ? { ...c, messages: c.messages.map(m => ({ ...m })) } : undefined
+}
+
+// ============================================
+// 查询函数 — 系统信息 / Dashboard
+// ============================================
 
 export const getSystemInfo = (): SystemInfo => ({
   ...systemInfo,
   nodeCount: devices.length,
-  onlineRate: Math.round(devices.filter(d => d.status === 'online').length / devices.length * 1000) / 10,
+  onlineRate: devices.length > 0
+    ? Math.round(devices.filter(d => d.status === 'online').length / devices.length * 1000) / 10
+    : 0,
 })
 
-export const getStatCards = (): StatCard[] => [
-  { id: 's1', label: '托管设备', value: devices.length, icon: '🖥️', trend: 12.5, linkTo: '/admin/devices' },
-  { id: 's2', label: '企业客户', value: customers.filter(c => c.type === 'ToB').length, icon: '🏢', trend: 8.3, linkTo: '/admin/customers' },
-  { id: 's3', label: '活跃订单', value: orders.filter(o => o.status !== 'completed').length, icon: '📦', trend: -2.1, linkTo: '/admin/orders' },
-  { id: 's4', label: '在线代理', value: devices.reduce((sum, d) => sum + d.agentCount, 0), icon: '🤖', trend: 15.0, linkTo: '/admin/devices' },
-]
+export const getStatCards = (tenantId: string = DEFAULT_TENANT_ID): StatCard[] => {
+  const tenantDevices = devices.filter(d => d.tenantId === tenantId)
+  const tenantMembers = members.filter(m => m.tenantId === tenantId)
+  const tenantWorkers = digitalWorkers.filter(w => w.tenantId === tenantId)
+
+  return [
+    { id: 's1', label: '托管设备', value: tenantDevices.length, icon: '🖥️', trend: 12.5, linkTo: '/admin/devices' },
+    { id: 's2', label: '在线设备', value: tenantDevices.filter(d => d.status === 'online').length, icon: '🟢', trend: 8.3, linkTo: '/admin/devices' },
+    { id: 's3', label: '团队成员', value: tenantMembers.length, icon: '👥', trend: 15.0, linkTo: '/admin/members' },
+    { id: 's4', label: '数字员工', value: tenantWorkers.filter(w => w.status === 'active').length, icon: '🤖', trend: 20.0, linkTo: '/admin/workers' },
+  ]
+}
 
 // ============================================
-// 变更函数
+// 变更函数 — 产品（保留）
 // ============================================
 
 export const addProduct = (product: Omit<Product, 'id' | 'createdAt'>): Product => {
@@ -304,6 +539,10 @@ export const toggleProductStatus = (id: string): Product | undefined => {
   const newStatus = product.status === 'active' ? 'inactive' : 'active'
   return updateProduct(id, { status: newStatus })
 }
+
+// ============================================
+// 变更函数 — 订单（保留）
+// ============================================
 
 export const advanceOrderStatus = (id: string): Order | undefined => {
   const order = orders.find(o => o.id === id)
@@ -340,6 +579,10 @@ export const advanceOrderStatus = (id: string): Order | undefined => {
   return orders.find(o => o.id === id)
 }
 
+// ============================================
+// 变更函数 — 开发者（保留）
+// ============================================
+
 export const updateDeveloperCertLevel = (id: string, newLevel: CertLevel): Developer | undefined => {
   const dev = developers.find(d => d.id === id)
   if (!dev) return undefined
@@ -369,8 +612,26 @@ export const updateDeveloperCertLevel = (id: string, newLevel: CertLevel): Devel
   return developers.find(d => d.id === id)
 }
 
-// @alpha: 设备管理 — 通过 Token 添加 OpenClaw 实例
-export const addDevice = (device: Omit<Device, 'id' | 'registeredAt' | 'status' | 'agentCount' | 'uptime' | 'lastSeen'>): Device => {
+// ============================================
+// 变更函数 — 设备（扩展配额校验）
+// ============================================
+
+// @alpha: 检查租户配额
+export const canAddDevice = (tenantId: string = DEFAULT_TENANT_ID): { allowed: boolean; current: number; max: number } => {
+  const current = getDeviceCount(tenantId)
+  const t = tenantId === DEFAULT_TENANT_ID ? tenant : undefined
+  const max = t ? t.maxDevices : 0
+  return { allowed: current < max, current, max }
+}
+
+export const addDevice = (
+  device: Omit<Device, 'id' | 'registeredAt' | 'status' | 'agentCount' | 'uptime' | 'lastSeen' | 'rpcConfig'>,
+): Device | { error: string } => {
+  const quota = canAddDevice(device.tenantId)
+  if (!quota.allowed) {
+    return { error: `已达配额上限（${quota.current}/${quota.max}），请升级订阅计划` }
+  }
+
   const newDevice: Device = {
     ...device,
     id: `dev${Date.now()}`,
@@ -379,13 +640,219 @@ export const addDevice = (device: Omit<Device, 'id' | 'registeredAt' | 'status' 
     uptime: '刚刚注册',
     lastSeen: new Date().toLocaleString('zh-CN'),
     registeredAt: new Date().toISOString().split('T')[0],
+    rpcConfig: makeRpcConfig(),
   }
   devices = [...devices, newDevice]
+
+  // @alpha: 记录活动日志
+  addActivityLog(device.tenantId, 'device_added', `设备 ${device.name} 已接入托管`)
+
   return newDevice
 }
 
 export const removeDevice = (id: string): boolean => {
+  const device = devices.find(d => d.id === id)
+  if (!device) return false
+
   const before = devices.length
   devices = devices.filter(d => d.id !== id)
+
+  // @alpha: 关联数字员工标记为不可用
+  digitalWorkers = digitalWorkers.map(w =>
+    w.deviceId === id ? { ...w, status: 'inactive' as const } : w
+  )
+
+  addActivityLog(device.tenantId, 'device_removed', `设备 ${device.name} 已解除托管`)
+
   return devices.length < before
+}
+
+// @alpha: 更新设备 RPC 配置
+export const updateDeviceRpcConfig = (deviceId: string, config: RpcConfig): Device | { error: string } => {
+  const device = devices.find(d => d.id === deviceId)
+  if (!device) return { error: '设备不存在' }
+
+  devices = devices.map(d =>
+    d.id === deviceId ? { ...d, rpcConfig: { ...config, plugins: config.plugins.map(p => ({ ...p })) } } : d
+  )
+
+  addActivityLog(device.tenantId, 'config_changed', `${device.name} 配置已更新`)
+
+  return devices.find(d => d.id === deviceId)!
+}
+
+// ============================================
+// 变更函数 — 成员
+// ============================================
+
+export const addMember = (
+  member: Omit<TenantMember, 'id' | 'createdAt' | 'assignedWorkerIds'>,
+): TenantMember => {
+  const newMember: TenantMember = {
+    ...member,
+    id: `m${Date.now()}`,
+    assignedWorkerIds: [],
+    createdAt: new Date().toISOString().split('T')[0],
+  }
+  members = [...members, newMember]
+  addActivityLog(member.tenantId, 'member_added', `成员 ${member.name} 已加入团队`)
+  return newMember
+}
+
+export const updateMember = (id: string, updates: Partial<TenantMember>): TenantMember | undefined => {
+  const idx = members.findIndex(m => m.id === id)
+  if (idx === -1) return undefined
+  members = members.map(m => m.id === id ? { ...m, ...updates } : m)
+  return members[idx]
+}
+
+export const removeMember = (id: string): boolean => {
+  const member = members.find(m => m.id === id)
+  if (!member) return false
+
+  members = members.filter(m => m.id !== id)
+
+  // @alpha: 清理分配关系
+  digitalWorkers = digitalWorkers.map(w => ({
+    ...w,
+    assignedMemberIds: w.assignedMemberIds.filter(mid => mid !== id),
+  }))
+
+  return true
+}
+
+// ============================================
+// 变更函数 — 数字员工
+// ============================================
+
+export const addDigitalWorker = (
+  worker: Omit<DigitalWorker, 'id' | 'createdAt' | 'status' | 'assignedMemberIds'>,
+): DigitalWorker => {
+  const newWorker: DigitalWorker = {
+    ...worker,
+    id: `w${Date.now()}`,
+    assignedMemberIds: [],
+    status: 'active',
+    createdAt: new Date().toISOString().split('T')[0],
+  }
+  digitalWorkers = [...digitalWorkers, newWorker]
+  addActivityLog(worker.tenantId, 'worker_created', `数字员工「${worker.name}」已创建`)
+  return newWorker
+}
+
+export const updateDigitalWorker = (id: string, updates: Partial<DigitalWorker>): DigitalWorker | undefined => {
+  const idx = digitalWorkers.findIndex(w => w.id === id)
+  if (idx === -1) return undefined
+  digitalWorkers = digitalWorkers.map(w => w.id === id ? { ...w, ...updates } : w)
+  return digitalWorkers[idx]
+}
+
+// @alpha: 分配数字员工给成员
+export const assignWorkerToMember = (workerId: string, memberIds: string[]): boolean => {
+  const worker = digitalWorkers.find(w => w.id === workerId)
+  if (!worker) return false
+
+  // 更新 worker 的 assignedMemberIds
+  digitalWorkers = digitalWorkers.map(w =>
+    w.id === workerId ? { ...w, assignedMemberIds: [...memberIds] } : w
+  )
+
+  // 同步更新成员的 assignedWorkerIds
+  members = members.map(m => {
+    const shouldHave = memberIds.includes(m.id)
+    const alreadyHas = m.assignedWorkerIds.includes(workerId)
+    if (shouldHave && !alreadyHas) {
+      return { ...m, assignedWorkerIds: [...m.assignedWorkerIds, workerId] }
+    }
+    if (!shouldHave && alreadyHas) {
+      return { ...m, assignedWorkerIds: m.assignedWorkerIds.filter(wid => wid !== workerId) }
+    }
+    return m
+  })
+
+  return true
+}
+
+export const removeDigitalWorker = (id: string): boolean => {
+  const worker = digitalWorkers.find(w => w.id === id)
+  if (!worker) return false
+
+  digitalWorkers = digitalWorkers.filter(w => w.id !== id)
+
+  // @alpha: 清理成员的 assignedWorkerIds
+  members = members.map(m => ({
+    ...m,
+    assignedWorkerIds: m.assignedWorkerIds.filter(wid => wid !== id),
+  }))
+
+  return true
+}
+
+// ============================================
+// 变更函数 — 对话
+// ============================================
+
+export const createConversation = (memberId: string, workerId: string): Conversation => {
+  const worker = digitalWorkers.find(w => w.id === workerId)
+  const now = new Date().toLocaleString('zh-CN')
+  const conv: Conversation = {
+    id: `conv${Date.now()}`,
+    tenantId: DEFAULT_TENANT_ID,
+    memberId,
+    workerId,
+    workerName: worker?.name || '未知员工',
+    messages: [],
+    createdAt: now,
+    updatedAt: now,
+  }
+  conversations = [...conversations, conv]
+  return conv
+}
+
+export const addMessageToConversation = (
+  conversationId: string,
+  message: Omit<ChatMessage, 'id' | 'timestamp'>,
+): ChatMessage => {
+  const now = new Date().toLocaleString('zh-CN')
+  const newMessage: ChatMessage = {
+    ...message,
+    id: `msg${Date.now()}`,
+    timestamp: now,
+  }
+
+  conversations = conversations.map(c => {
+    if (c.id !== conversationId) return c
+    return {
+      ...c,
+      messages: [...c.messages, newMessage],
+      updatedAt: now,
+    }
+  })
+
+  return newMessage
+}
+
+// ============================================
+// 活动日志
+// ============================================
+
+const addActivityLog = (tenantId: string, type: ActivityLog['type'], message: string): void => {
+  const log: ActivityLog = {
+    id: `al${Date.now()}`,
+    tenantId,
+    type,
+    message,
+    timestamp: new Date().toLocaleString('zh-CN'),
+  }
+  activityLogs = [...activityLogs, log]
+}
+
+// ============================================
+// 工具函数
+// ============================================
+
+// @alpha: API Key 脱敏 — 保留前6后4
+export const maskApiKey = (key: string): string => {
+  if (key.length <= 10) return '****'
+  return key.slice(0, 6) + '****' + key.slice(-4)
 }
