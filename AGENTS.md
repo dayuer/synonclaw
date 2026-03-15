@@ -16,10 +16,11 @@ synonclaw/
 │   │   ├── pages/
 │   │   │   ├── DashboardPage.tsx   # 仪表盘（StatCard 动画 + 最近订单 + 系统状态）
 │   │   │   ├── ProductsPage.tsx    # 产品管理（CRUD + Toggle）
-│   │   │   ├── CustomersPage.tsx   # 客户管理（搜索/筛选 + 详情）
+│   │   │   ├── DevicesPage.tsx     # 🆕 设备管理（设备=OpenClaw实例，Token托管）
+│   │   │   ├── CustomersPage.tsx   # 客户管理（搜索/筛选 + 详情 + 关联设备）
 │   │   │   ├── OrdersPage.tsx      # 订单管理（状态推进 + 时间线）
 │   │   │   ├── DevelopersPage.tsx  # 开发者网络（认证等级 + 任务记录）
-│   │   │   └── SettingsPage.tsx    # 系统设置（OpenClaw Token + 主题）
+│   │   │   └── SettingsPage.tsx    # 系统设置（系统信息 + 主题 + RPC文档）
 │   │   ├── data/
 │   │   │   ├── types.ts            # 领域实体类型定义
 │   │   │   └── mockData.ts         # Mock 数据 + CRUD 操作函数
@@ -58,7 +59,8 @@ main.tsx → App.tsx
                        └── Pages (通过 <Routes> 嵌套渲染)
                            ├── DashboardPage ← mockData (getStatCards, getRecentOrders, getSystemInfo)
                            ├── ProductsPage  ← mockData (getProducts, addProduct, updateProduct, toggleProductStatus)
-                           ├── CustomersPage ← mockData (getCustomers, getOrdersByCustomerId)
+                           ├── DevicesPage   ← mockData (getDevices, addDevice, removeDevice, getDevicesByCustomerId)
+                           ├── CustomersPage ← mockData (getCustomers, getOrdersByCustomerId, getDevicesByCustomerId)
                            ├── OrdersPage    ← mockData (getOrders, advanceOrderStatus)
                            ├── DevelopersPage← mockData (getDevelopers, updateDeveloperCertLevel)
                            └── SettingsPage  ← mockData (getSystemInfo)
@@ -80,7 +82,8 @@ styles: tokens.css → global.css → 页面 CSS
 | `admin.css` | Admin 完整视觉系统（布局/表格/表单/卡片/徽章/模态框/时间线） |
 | `DashboardPage.tsx` | 统计卡片（rAF 计数器动画）+ 最近订单表 + 系统指标面板 |
 | `ProductsPage.tsx` | 产品 CRUD（模态框表单 + 校验）+ 上下架 Toggle Switch |
+| `DevicesPage.tsx` | 设备列表（状态筛选 + 概览统计）+ 详情（连接信息 + AI代理 + 同客户设备）+ 添加设备（Token托管）|
 | `CustomersPage.tsx` | 客户列表（三维搜索/筛选）+ 详情页（关联设备/订单） |
 | `OrdersPage.tsx` | 订单列表 + 详情（状态推进按钮 + 时间线） |
 | `DevelopersPage.tsx` | 开发者列表（技能标签）+ 详情（认证历史 + 任务记录 + 等级变更） |
-| `SettingsPage.tsx` | 系统信息 + OpenClaw Token/RPC 配置 + 主题展示 |
+| `SettingsPage.tsx` | 系统信息 + 主题设置 + OpenClaw RPC 接口文档（per-device 作用域）|
