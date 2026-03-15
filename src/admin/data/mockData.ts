@@ -1,7 +1,7 @@
 // @alpha: Mock 数据层 — 模拟全部业务数据 + CRUD 操作函数
 
 import type {
-  Product, Customer, Order, Developer,
+  Product, Customer, Order, Developer, Device,
   StatCard, SystemInfo, OrderStatus, CertLevel,
   ORDER_STATUS_FLOW as _FLOW
 } from './types'
@@ -190,12 +190,52 @@ let developers: Developer[] = [
   },
 ]
 
+// @alpha: 设备列表 — 每台设备 = 一个 OpenClaw 实例
+let devices: Device[] = [
+  {
+    id: 'dev1', name: 'TF-RACK-01', customerId: 'c1', customerName: '深圳腾飞科技有限公司',
+    productName: 'SynonClaw Rack X1', token: 'oc_tf_****a3f8',
+    endpoint: 'ws://10.0.1.10:3002', status: 'online', agentCount: 6,
+    uptime: '28 天 12 小时', lastSeen: '2026-03-15 22:00', registeredAt: '2026-02-05',
+  },
+  {
+    id: 'dev2', name: 'TF-RACK-02', customerId: 'c1', customerName: '深圳腾飞科技有限公司',
+    productName: 'SynonClaw Rack X1', token: 'oc_tf_****b7e2',
+    endpoint: 'ws://10.0.1.11:3002', status: 'online', agentCount: 4,
+    uptime: '28 天 12 小时', lastSeen: '2026-03-15 22:00', registeredAt: '2026-02-05',
+  },
+  {
+    id: 'dev3', name: 'YQ-RACK-01', customerId: 'c2', customerName: '杭州云启信息技术公司',
+    productName: 'SynonClaw Rack X1', token: 'oc_yq_****c1d9',
+    endpoint: 'ws://172.16.0.50:3002', status: 'online', agentCount: 3,
+    uptime: '15 天 6 小时', lastSeen: '2026-03-15 21:55', registeredAt: '2026-02-18',
+  },
+  {
+    id: 'dev4', name: 'XM-DESK-01', customerId: 'c4', customerName: '王小明工作室',
+    productName: 'SynonClaw Desk Pro', token: 'oc_xm_****d4f0',
+    endpoint: 'ws://192.168.1.100:3002', status: 'online', agentCount: 2,
+    uptime: '10 天 3 小时', lastSeen: '2026-03-15 21:50', registeredAt: '2026-03-01',
+  },
+  {
+    id: 'dev5', name: 'XM-DESK-02', customerId: 'c4', customerName: '王小明工作室',
+    productName: 'SynonClaw Desk Pro', token: 'oc_xm_****e5a1',
+    endpoint: 'ws://192.168.1.101:3002', status: 'offline', agentCount: 0,
+    uptime: '—', lastSeen: '2026-03-14 18:30', registeredAt: '2026-03-01',
+  },
+  {
+    id: 'dev6', name: 'TF-DESK-01', customerId: 'c1', customerName: '深圳腾飞科技有限公司',
+    productName: 'SynonClaw Desk Lite', token: 'oc_tf_****f6b2',
+    endpoint: 'ws://10.0.2.20:3002', status: 'error', agentCount: 0,
+    uptime: '—', lastSeen: '2026-03-15 08:12', registeredAt: '2026-02-20',
+  },
+]
+
 const systemInfo: SystemInfo = {
   version: '1.2.0-beta',
   environment: 'Production',
   buildTime: '2026-03-15 10:00:00',
-  nodeCount: 24,
-  onlineRate: 95.8,
+  nodeCount: devices.length,
+  onlineRate: Math.round(devices.filter(d => d.status === 'online').length / devices.length * 1000) / 10,
   apiCalls: 128456,
   uptime: '32 天 14 小时',
   lastBackup: '2026-03-15 04:00:00',
@@ -220,13 +260,21 @@ export const getRecentOrders = (count: number): Order[] =>
 export const getDevelopers = (): Developer[] => [...developers]
 export const getDeveloperById = (id: string): Developer | undefined => developers.find(d => d.id === id)
 
-export const getSystemInfo = (): SystemInfo => ({ ...systemInfo })
+export const getDevices = (): Device[] => [...devices]
+export const getDeviceById = (id: string): Device | undefined => devices.find(d => d.id === id)
+export const getDevicesByCustomerId = (cid: string): Device[] => devices.filter(d => d.customerId === cid)
+
+export const getSystemInfo = (): SystemInfo => ({
+  ...systemInfo,
+  nodeCount: devices.length,
+  onlineRate: Math.round(devices.filter(d => d.status === 'online').length / devices.length * 1000) / 10,
+})
 
 export const getStatCards = (): StatCard[] => [
-  { id: 's1', label: '设备总数', value: 24, icon: '🖥️', trend: 12.5, linkTo: '/admin/products' },
+  { id: 's1', label: '托管设备', value: devices.length, icon: '🖥️', trend: 12.5, linkTo: '/admin/devices' },
   { id: 's2', label: '企业客户', value: customers.filter(c => c.type === 'ToB').length, icon: '🏢', trend: 8.3, linkTo: '/admin/customers' },
   { id: 's3', label: '活跃订单', value: orders.filter(o => o.status !== 'completed').length, icon: '📦', trend: -2.1, linkTo: '/admin/orders' },
-  { id: 's4', label: '认证开发者', value: developers.filter(d => d.status === 'active').length, icon: '👨‍💻', trend: 15.0, linkTo: '/admin/developers' },
+  { id: 's4', label: '在线代理', value: devices.reduce((sum, d) => sum + d.agentCount, 0), icon: '🤖', trend: 15.0, linkTo: '/admin/devices' },
 ]
 
 // ============================================
@@ -319,4 +367,25 @@ export const updateDeveloperCertLevel = (id: string, newLevel: CertLevel): Devel
   })
 
   return developers.find(d => d.id === id)
+}
+
+// @alpha: 设备管理 — 通过 Token 添加 OpenClaw 实例
+export const addDevice = (device: Omit<Device, 'id' | 'registeredAt' | 'status' | 'agentCount' | 'uptime' | 'lastSeen'>): Device => {
+  const newDevice: Device = {
+    ...device,
+    id: `dev${Date.now()}`,
+    status: 'online',
+    agentCount: 0,
+    uptime: '刚刚注册',
+    lastSeen: new Date().toLocaleString('zh-CN'),
+    registeredAt: new Date().toISOString().split('T')[0],
+  }
+  devices = [...devices, newDevice]
+  return newDevice
+}
+
+export const removeDevice = (id: string): boolean => {
+  const before = devices.length
+  devices = devices.filter(d => d.id !== id)
+  return devices.length < before
 }

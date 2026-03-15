@@ -1,8 +1,8 @@
 // @alpha: 客户管理页面
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { getCustomers, getOrdersByCustomerId } from '../data/mockData'
-import type { Customer, CustomerType, CustomerStatus, Order } from '../data/types'
-import { CUSTOMER_STATUS_LABELS, ORDER_STATUS_LABELS } from '../data/types'
+import { getCustomers, getOrdersByCustomerId, getDevicesByCustomerId } from '../data/mockData'
+import type { Customer, CustomerType, CustomerStatus, Order, Device } from '../data/types'
+import { CUSTOMER_STATUS_LABELS, ORDER_STATUS_LABELS, DEVICE_STATUS_LABELS } from '../data/types'
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -11,6 +11,7 @@ export default function CustomersPage() {
   const [filterStatus, setFilterStatus] = useState<CustomerStatus | ''>('')
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [customerOrders, setCustomerOrders] = useState<Order[]>([])
+  const [customerDevices, setCustomerDevices] = useState<Device[]>([])
 
   const refresh = useCallback(() => setCustomers(getCustomers()), [])
   useEffect(() => { refresh() }, [refresh])
@@ -27,6 +28,7 @@ export default function CustomersPage() {
   const openDetail = (customer: Customer) => {
     setSelectedCustomer(customer)
     setCustomerOrders(getOrdersByCustomerId(customer.id))
+    setCustomerDevices(getDevicesByCustomerId(customer.id))
   }
 
   // 详情视图
@@ -80,8 +82,8 @@ export default function CustomersPage() {
                   <div className="admin-detail__value">{selectedCustomer.industry}</div>
                 </div>
                 <div className="admin-detail__field">
-                  <div className="admin-detail__label">设备数</div>
-                  <div className="admin-detail__value">{selectedCustomer.deviceCount} 台</div>
+                  <div className="admin-detail__label">托管设备</div>
+                  <div className="admin-detail__value">{customerDevices.length} 台</div>
                 </div>
                 <div className="admin-detail__field">
                   <div className="admin-detail__label">创建时间</div>
@@ -121,6 +123,44 @@ export default function CustomersPage() {
                           <span className="status-badge__dot" />{ORDER_STATUS_LABELS[o.status]}
                         </span>
                       </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* 托管设备 */}
+          <div className="admin-panel">
+            <div className="admin-panel__header">
+              <h2 className="admin-panel__title">托管设备 ({customerDevices.length})</h2>
+            </div>
+            {customerDevices.length === 0 ? (
+              <div className="admin-empty" style={{ padding: 'var(--space-2xl)' }}>
+                <div className="admin-empty__icon">🖥️</div>
+                <p className="admin-empty__title">暂无托管设备</p>
+              </div>
+            ) : (
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>设备名</th>
+                    <th>端点</th>
+                    <th>状态</th>
+                    <th>代理数</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {customerDevices.map(d => (
+                    <tr key={d.id}>
+                      <td style={{ fontWeight: 600 }}>{d.name}</td>
+                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>{d.endpoint}</td>
+                      <td>
+                        <span className={`status-badge status-badge--${d.status}`}>
+                          <span className="status-badge__dot" />{DEVICE_STATUS_LABELS[d.status]}
+                        </span>
+                      </td>
+                      <td>{d.agentCount}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -203,7 +243,7 @@ export default function CustomersPage() {
                     <span className="status-badge__dot" />{CUSTOMER_STATUS_LABELS[c.status]}
                   </span>
                 </td>
-                <td>{c.deviceCount}</td>
+                <td>{getDevicesByCustomerId(c.id).length}</td>
                 <td>{c.industry}</td>
                 <td>
                   <button className="admin-btn admin-btn--ghost admin-btn--sm" onClick={() => openDetail(c)}>查看</button>

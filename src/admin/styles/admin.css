@@ -450,15 +450,42 @@
 
 .status-badge--inactive,
 .status-badge--churned,
-.status-badge--cancelled {
+.status-badge--cancelled,
+.status-badge--offline {
   color: var(--color-text-muted);
   background: rgba(85, 85, 112, 0.15);
 }
 
 .status-badge--inactive .status-badge__dot,
 .status-badge--churned .status-badge__dot,
-.status-badge--cancelled .status-badge__dot {
+.status-badge--cancelled .status-badge__dot,
+.status-badge--offline .status-badge__dot {
   background: var(--color-text-muted);
+}
+
+.status-badge--online {
+  color: var(--color-success);
+  background: rgba(0, 255, 136, 0.1);
+}
+
+.status-badge--online .status-badge__dot {
+  background: var(--color-success);
+  box-shadow: 0 0 6px var(--color-success);
+}
+
+.status-badge--error {
+  color: var(--color-error);
+  background: rgba(255, 77, 106, 0.1);
+}
+
+.status-badge--error .status-badge__dot {
+  background: var(--color-error);
+  animation: pulse-error 2s infinite;
+}
+
+@keyframes pulse-error {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }
 
 /* --- 按钮 --- */

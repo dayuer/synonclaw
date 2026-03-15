@@ -80,6 +80,24 @@ export interface Developer {
   joinedAt: string
 }
 
+// @alpha: 设备 = OpenClaw 实例，通过 Token 托管
+export type DeviceStatus = 'online' | 'offline' | 'error'
+
+export interface Device {
+  id: string
+  name: string
+  customerId: string
+  customerName: string
+  productName: string
+  token: string        // OpenClaw API Token（脱敏显示）
+  endpoint: string     // WebSocket/RPC 端点
+  status: DeviceStatus
+  agentCount: number   // 运行中的 AI 代理数
+  uptime: string
+  lastSeen: string
+  registeredAt: string
+}
+
 export interface StatCard {
   id: string
   label: string
@@ -127,4 +145,10 @@ export const CERT_LEVEL_LABELS: Record<CertLevel, string> = {
   junior: '初级',
   mid: '中级',
   senior: '高级',
+}
+
+export const DEVICE_STATUS_LABELS: Record<DeviceStatus, string> = {
+  online: '在线',
+  offline: '离线',
+  error: '异常',
 }
