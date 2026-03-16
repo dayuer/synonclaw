@@ -1,13 +1,15 @@
 // @alpha: 系统设置页面 — 系统信息 + 主题设置
 import { useState, useEffect } from 'react'
-import { getSystemInfo } from '../data/mockData'
+import { getSystemInfo, checkGnbCompliance } from '../data/mockData'
 import type { SystemInfo } from '../data/types'
 
 export default function SettingsPage() {
   const [sysInfo, setSysInfo] = useState<SystemInfo | null>(null)
+  const [compliance, setCompliance] = useState<ReturnType<typeof checkGnbCompliance> | null>(null)
 
   useEffect(() => {
     setSysInfo(getSystemInfo())
+    setCompliance(checkGnbCompliance())
   }, [])
 
   return (
@@ -124,6 +126,49 @@ export default function SettingsPage() {
                 <tr><td style={{ fontFamily: 'var(--font-mono)' }}>GET /openclaw/events</td><td>事件列表</td><td>单设备</td></tr>
               </tbody>
             </table>
+          </div>
+        </div>
+
+        {/* @alpha: GNB 安全建议 */}
+        <div className="admin-panel" style={{ gridColumn: '1 / -1' }}>
+          <div className="admin-panel__header">
+            <h2 className="admin-panel__title">🔐 GNB 安全建议</h2>
+            {compliance && (
+              compliance.compliant
+                ? <span className="compliance-badge compliance-badge--ok">✓ 全部合规</span>
+                : <span className="compliance-badge compliance-badge--warn">⚠️ {compliance.issues.length} 项待处理</span>
+            )}
+          </div>
+          <div className="admin-panel__body">
+            <div style={{ marginBottom: 'var(--space-lg)' }}>
+              <p style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-small)', marginTop: 0 }}>
+                基于 <strong>OpenGNB 审计报告</strong> 的安全建议：
+              </p>
+              <ul style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-small)', paddingLeft: 'var(--space-lg)', margin: 0 }}>
+                <li>启用 ARC4 加密 + 每分钟密钥轮换（<code>--crypto-type arc4 --crypto-key-update-interval minute</code>）</li>
+                <li>使用高熵 Passcode（<code>openssl rand -hex 4</code> 生成）</li>
+                <li>确保所有节点 NTP 时钟同步（误差 {'<'} 30 秒）</li>
+                <li>长期考虑切换到 Full 模式（ED25519 密钥对）</li>
+              </ul>
+            </div>
+            {compliance && !compliance.compliant && (
+              <table className="admin-table" style={{ fontSize: 'var(--text-xs)' }}>
+                <thead>
+                  <tr>
+                    <th>设备</th>
+                    <th>问题</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {compliance.issues.map((iss, i) => (
+                    <tr key={i}>
+                      <td style={{ fontWeight: 600 }}>{iss.deviceName}</td>
+                      <td style={{ color: 'var(--color-accent-red)' }}>{iss.issue}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       </div>

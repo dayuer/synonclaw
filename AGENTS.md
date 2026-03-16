@@ -14,25 +14,26 @@ synonclaw/
 │   │   │   ├── AdminSidebar.tsx    # 分组侧边栏导航（概览/设备与角色/团队/运营）
 │   │   │   └── AdminTopBar.tsx     # 顶栏（管理员信息 + 退出）
 │   │   ├── pages/
-│   │   │   ├── DashboardPage.tsx   # 控制台总览（StatCard + 活动日志 + 订阅计划 + 系统状态）
-│   │   │   ├── DevicesPage.tsx     # 设备管理（列表 + 详情 + 添加 + 配额校验）
-│   │   │   ├── DeviceConfigPage.tsx# 🆕 RPC 远程配置（模型/Key/温度/Prompt/插件）
-│   │   │   ├── WorkersPage.tsx     # 🆕 数字员工管理（CRUD + 设备绑定 + 成员分配）
-│   │   │   ├── MembersPage.tsx     # 🆕 团队成员管理（CRUD + 角色 + 关联数字员工）
-│   │   │   ├── WorkspacePage.tsx   # 🆕 成员工作台（数字员工卡片 + AI 对话界面）
-│   │   │   ├── ProductsPage.tsx    # 🆕 产品管理（CRUD + Toggle）
+│   │   │   ├── DashboardPage.tsx   # 控制台总览（StatCard + 活动日志 + 订阅计划 + 系统状态 + GNB 网络指标）
+│   │   │   ├── DevicesPage.tsx     # 设备管理（列表 + 详情 + GNB 安全面板 + 配额校验）
+│   │   │   ├── DeviceConfigPage.tsx# RPC 远程配置（模型/Key/温度/Prompt/插件）
+│   │   │   ├── NetworkPage.tsx     # 🔥 GNB 操作面板（三Tab: 节点注册/隧道监控/私域子网 + Passcode控制）
+│   │   │   ├── WorkersPage.tsx     # 数字员工管理（CRUD + 设备绑定 + 成员分配）
+│   │   │   ├── MembersPage.tsx     # 团队成员管理（CRUD + 角色 + 关联数字员工）
+│   │   │   ├── WorkspacePage.tsx   # 成员工作台（数字员工卡片 + AI 对话界面）
+│   │   │   ├── ProductsPage.tsx    # 产品管理（CRUD + Toggle）
 │   │   │   ├── CustomersPage.tsx   # 客户管理（搜索/筛选 + 详情 + 关联设备）
 │   │   │   ├── OrdersPage.tsx      # 订单管理（状态推进 + 时间线）
 │   │   │   ├── DevelopersPage.tsx  # 开发者网络（认证等级 + 任务记录）
-│   │   │   └── SettingsPage.tsx    # 系统设置（系统信息 + 主题 + RPC文档）
+│   │   │   └── SettingsPage.tsx    # 系统设置（系统信息 + 主题 + GNB 安全建议）
 │   │   ├── data/
-│   │   │   ├── types.ts            # 领域实体类型定义（含多租户/RPC/数字员工）
-│   │   │   ├── mockData.ts         # Mock 数据 + CRUD（多租户过滤 + 配额校验 + 关联清理）
-│   │   │   ├── rpcClient.ts        # 🆕 RPC 指令翻译中心（config diff → 指令 + 校验）
+│   │   │   ├── types.ts            # 领域实体类型定义（含多租户/RPC/数字员工/GNB 网络/Subnet 私域）
+│   │   │   ├── mockData.ts         # Mock 数据 + CRUD（含 GNB 节点注册/Passcode/子网/隧道/合规检查）
+│   │   │   ├── rpcClient.ts        # RPC 指令翻译中心（config diff → 指令 + 校验）
 │   │   │   └── __tests__/
-│   │   │       └── mockData.test.ts# 🆕 数据层 TDD 测试（29 用例）
+│   │   │       └── mockData.test.ts# 数据层 TDD 测试（48 用例含 GNB 注册/Passcode/子网）
 │   │   └── styles/
-│   │       └── admin.css           # Admin 完整视觉系统（含工作台/对话/插件等新组件）
+│   │       └── admin.css           # Admin 完整视觉系统（含网络拓扑/安全警告/合规标识/子网卡片）
 │   ├── components/
 │   │   ├── layout/             # Navbar / Footer（官网全局布局）
 │   │   └── shared/             # CTAButton / SectionTitle / FeatureCard
@@ -66,20 +67,21 @@ main.tsx → App.tsx
                │
                └── Admin 路由 (/admin/*)
                    └── AdminLayout
-                       ├── AdminSidebar (分组导航: 概览/设备与角色/团队/运营)
+                       ├── AdminSidebar (分组导航: 概览/网络与设备/团队/运营)
                        ├── AdminTopBar
                        └── Pages (通过 <Routes> 嵌套渲染)
-                           ├── DashboardPage  ← mockData (getStatCards, getActivityLogs, getTenant, getSystemInfo)
-                           ├── DevicesPage     ← mockData + DeviceConfigPage
-                           │   └── DeviceConfigPage ← rpcClient (translateConfigToCommands, validateRpcConfig)
-                           ├── WorkersPage     ← mockData (CRUD + assignWorkerToMember)
-                           ├── MembersPage     ← mockData (CRUD + getWorkersByMemberId)
-                           ├── WorkspacePage   ← mockData + rpcClient (sendChatMessage)
-                           ├── ProductsPage    ← mockData (getProducts, addProduct, toggleProductStatus)
+                           ├── DashboardPage  ← mockData (getStatCards含活跃隧道, getSystemInfo含GNB健康)
+                           ├── DevicesPage     ← mockData + DeviceConfigPage + GNB安全面板
+                           │   └── DeviceConfigPage ← rpcClient
+                           ├── NetworkPage     ← mockData (三Tab: 节点注册+隧道监控+私域子网+Passcode控制)
+                           ├── WorkersPage     ← mockData
+                           ├── MembersPage     ← mockData
+                           ├── WorkspacePage   ← mockData + rpcClient
+                           ├── ProductsPage    ← mockData
                            ├── CustomersPage   ← mockData
                            ├── OrdersPage      ← mockData
                            ├── DevelopersPage  ← mockData
-                           └── SettingsPage    ← mockData
+                           └── SettingsPage    ← mockData + checkGnbCompliance
 
 数据层: types.ts → mockData.ts + rpcClient.ts
 样式: tokens.css → global.css → 页面 CSS
@@ -94,13 +96,14 @@ main.tsx → App.tsx
 | `AdminLayout.tsx` | Admin 主框架，管理 Sidebar 折叠状态，渲染嵌套子路由（10 个） |
 | `AdminSidebar.tsx` | 分组导航（概览/设备与角色/团队/运营）+ 路由高亮 + 折叠 + 移动端浮层 |
 | `AdminTopBar.tsx` | 系统标题 + 管理员头像 + 退出操作 |
-| `types.ts` | 全部领域实体类型 + 枚举标签映射 + 多租户/RPC/数字员工类型 |
-| `mockData.ts` | 模拟数据存储 + 30+ 查询/变更函数 + tenantId 过滤 + 配额校验 + 关联清理 |
-| `rpcClient.ts` | RPC 指令翻译中心 — config diff → 指令列表 + 校验 + 模拟执行 + 模拟 AI 回复 |
-| `admin.css` | Admin 完整视觉系统（布局/表格/表单/卡片/对话/插件/工作台/活动列表） |
-| `DashboardPage.tsx` | 统计卡片(rAF 动画) + 活动日志 + 订阅计划 + 系统状态 |
-| `DevicesPage.tsx` | 设备列表(配额提示) + 详情(RPC 概览) + 添加(Token 托管) + 配置入口 |
+| `types.ts` | 全部领域实体类型 + 枚举标签映射 + 多租户/RPC/数字员工/GNB 网络/Subnet 私域类型 |
+| `mockData.ts` | 模拟数据存储 + 36+ 查询/变更函数 + GNB 节点注册/Passcode/子网CRUD/隧道/合规检查 |
+| `rpcClient.ts` | RPC 指令翻译中心 — config diff → 指令列表 + 校验 + 模拟执行 |
+| `admin.css` | Admin 完整视觉系统（布局/表格/表单/卡片/网络拓扑/安全警告/合规标识） |
+| `DashboardPage.tsx` | 统计卡片(rAF 动画) + 活动日志 + 订阅计划 + 系统状态(含 GNB 健康/延迟) |
+| `DevicesPage.tsx` | 设备列表(配额提示) + 详情(RPC 概览 + GNB 安全面板) + 配置入口 |
 | `DeviceConfigPage.tsx` | RPC 远程配置 GUI — 模型/Key/Temperature/TopP/MaxTokens/Prompt/Plugins |
+| `NetworkPage.tsx` | GNB 操作面板 — 节点Tab(注册模态框+筛选+详情) + 隧道Tab(健康度+概览) + 私域Tab(子网卡片+CIDR匹配) + Passcode Web编辑 |
 | `WorkersPage.tsx` | 数字员工 CRUD + 设备绑定 + 成员分配模态框 |
 | `MembersPage.tsx` | 团队成员 CRUD + 角色管理 + 关联数字员工展示 |
 | `WorkspacePage.tsx` | 成员工作台 — 数字员工卡片 + AI 对话(消息气泡/Mock 回复/打字动画) + 历史对话 |

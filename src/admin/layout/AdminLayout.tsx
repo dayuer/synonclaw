@@ -5,6 +5,7 @@ import AdminSidebar from './AdminSidebar'
 import AdminTopBar from './AdminTopBar'
 import DashboardPage from '../pages/DashboardPage'
 import DevicesPage from '../pages/DevicesPage'
+import NetworkPage from '../pages/NetworkPage'
 import WorkersPage from '../pages/WorkersPage'
 import MembersPage from '../pages/MembersPage'
 import WorkspacePage from '../pages/WorkspacePage'
@@ -57,6 +58,7 @@ export default function AdminLayout() {
             <Routes>
               <Route index element={<DashboardPage />} />
               <Route path="devices" element={<DevicesPage />} />
+              <Route path="network" element={<NetworkPage />} />
               <Route path="workers" element={<WorkersPage />} />
               <Route path="members" element={<MembersPage />} />
               <Route path="workspace" element={<WorkspacePage />} />

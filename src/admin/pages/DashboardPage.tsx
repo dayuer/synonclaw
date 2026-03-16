@@ -160,6 +160,14 @@ export default function DashboardPage() {
                     <span className="system-metric__label">API 调用</span>
                     <span className="system-metric__value">{sysInfo.apiCalls.toLocaleString()}</span>
                   </div>
+                  <div className="system-metric">
+                    <span className="system-metric__label">GNB 网络健康</span>
+                    <span className="system-metric__value" style={{ color: sysInfo.gnbHealth >= 80 ? 'var(--color-accent-green)' : 'var(--color-accent-yellow, #f0a030)' }}>{sysInfo.gnbHealth}%</span>
+                  </div>
+                  <div className="system-metric">
+                    <span className="system-metric__label">平均延迟</span>
+                    <span className="system-metric__value" style={{ fontFamily: 'var(--font-mono)' }}>{sysInfo.avgLatency}ms</span>
+                  </div>
                 </div>
               </div>
             </div>

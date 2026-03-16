@@ -3,6 +3,8 @@ import { describe, it, expect } from 'vitest'
 import {
   PLAN_LIMITS, DEFAULT_RPC_CONFIG, PLAN_LABELS,
   MEMBER_ROLE_LABELS, MODEL_PROVIDER_LABELS, DEVICE_STATUS_LABELS,
+  GNB_NODE_TYPE_LABELS, GNB_CRYPTO_TYPE_LABELS, GNB_KEY_UPDATE_LABELS,
+  NAT_TYPE_LABELS, TUNNEL_STATUS_LABELS,
 } from '../types'
 import {
   getTenant,
@@ -14,6 +16,10 @@ import {
   getActivityLogs,
   getConversations, createConversation, addMessageToConversation,
   getStatCards, maskApiKey,
+  getGnbTunnels, getGnbNetworkHealth, checkGnbCompliance, maskPasscode,
+  getSystemInfo,
+  registerGnbNode, updateGnbPasscode,
+  getSubnets, addSubnet, removeSubnet, getSubnetMembers,
 } from '../mockData'
 import {
   translateConfigToCommands, validateRpcConfig,
@@ -285,13 +291,14 @@ describe('RBAC 权限', () => {
 // ============================================
 
 describe('Dashboard', () => {
-  it('统计卡片正确计数', () => {
+  it('统计卡片正确计数（含活跃隧道）', () => {
     const cards = getStatCards()
-    expect(cards).toHaveLength(4)
+    expect(cards).toHaveLength(5)
     expect(cards[0].label).toBe('托管设备')
     expect(cards[1].label).toBe('在线设备')
-    expect(cards[2].label).toBe('团队成员')
-    expect(cards[3].label).toBe('数字员工')
+    expect(cards[2].label).toBe('活跃隧道')
+    expect(cards[3].label).toBe('团队成员')
+    expect(cards[4].label).toBe('数字员工')
   })
 
   it('活动日志按时间倒序', () => {
@@ -339,3 +346,215 @@ describe('成员管理', () => {
     expect(worker?.assignedMemberIds).not.toContain(member.id)
   })
 })
+
+// ============================================
+// GNB 网络数据
+// ============================================
+
+describe('GNB 网络数据', () => {
+  it('设备包含 gnbConfig', () => {
+    const devices = getDevices()
+    for (const d of devices) {
+      expect(d.gnbConfig).toBeDefined()
+      expect(d.gnbConfig.uuid).toBeTruthy()
+      expect(d.gnbConfig.virtualIp).toBeTruthy()
+    }
+  })
+
+  it('隧道查询返回至少 3 条', () => {
+    const tunnels = getGnbTunnels()
+    expect(tunnels.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('隧道包含 active 和 degraded 状态', () => {
+    const tunnels = getGnbTunnels()
+    const statuses = tunnels.map(t => t.status)
+    expect(statuses).toContain('active')
+    expect(statuses).toContain('degraded')
+  })
+
+  it('GNB 常量映射完整', () => {
+    expect(GNB_NODE_TYPE_LABELS.normal).toBe('普通节点')
+    expect(GNB_NODE_TYPE_LABELS.index).toBe('Index 信令')
+    expect(GNB_CRYPTO_TYPE_LABELS.arc4).toBe('ARC4')
+    expect(GNB_KEY_UPDATE_LABELS.minute).toBe('每分钟')
+    expect(NAT_TYPE_LABELS.full_cone).toBe('Full Cone')
+    expect(TUNNEL_STATUS_LABELS.active).toBe('正常')
+  })
+})
+
+// ============================================
+// GNB 隧道健康
+// ============================================
+
+describe('GNB 隧道健康', () => {
+  it('健康度计算正确', () => {
+    const health = getGnbNetworkHealth()
+    expect(health.totalTunnels).toBeGreaterThan(0)
+    expect(health.activeTunnels).toBeLessThanOrEqual(health.totalTunnels)
+    expect(health.avgLatency).toBeGreaterThanOrEqual(0)
+  })
+
+  it('平均延迟排除 down 隧道', () => {
+    const health = getGnbNetworkHealth()
+    // down 隧道 latency=0 不应拉低平均值
+    expect(health.avgLatency).toBeGreaterThan(0)
+  })
+})
+
+// ============================================
+// GNB 安全校验
+// ============================================
+
+describe('GNB 安全校验', () => {
+  it('Passcode 脱敏', () => {
+    expect(maskPasscode('0xA7B3C9D1')).toBe('0xA7****D1')
+    expect(maskPasscode('0x12')).toBe('****')
+  })
+
+  it('合规检查发现不合规设备', () => {
+    const result = checkGnbCompliance()
+    // dev5 keyUpdateInterval=none, dev6 cryptoType=none + keyUpdateInterval=none
+    expect(result.compliant).toBe(false)
+    expect(result.issues.length).toBeGreaterThan(0)
+  })
+
+  it('系统信息含 GNB 健康指标', () => {
+    const info = getSystemInfo()
+    expect(info.gnbHealth).toBeGreaterThanOrEqual(0)
+    expect(info.gnbHealth).toBeLessThanOrEqual(100)
+    expect(info.avgLatency).toBeGreaterThanOrEqual(0)
+  })
+})
+
+// ============================================
+// GNB 节点注册
+// ============================================
+
+describe('GNB 节点注册', () => {
+  it('注册成功返回新设备', () => {
+    const before = getDevices().length
+    const result = registerGnbNode({
+      name: 'TEST-NODE-01',
+      uuid: '00009001',
+      virtualIp: '10.1.99.1',
+      nodeType: 'normal',
+      cryptoType: 'arc4',
+      passcode: '0xTEST0001',
+    })
+
+    expect('error' in result).toBe(false)
+    const device = result as ReturnType<typeof getDeviceById> & { id: string }
+    expect(device.name).toBe('TEST-NODE-01')
+    expect(device.gnbConfig.uuid).toBe('00009001')
+    expect(device.status).toBe('online')
+    expect(getDevices().length).toBe(before + 1)
+
+    // 清理
+    removeDevice(device.id)
+  })
+
+  it('UUID 重复返回错误', () => {
+    const result = registerGnbNode({
+      name: 'DUP-UUID',
+      uuid: '00001001', // dev1 已用
+      virtualIp: '10.1.99.2',
+      nodeType: 'normal',
+      cryptoType: 'arc4',
+      passcode: '0xDUPTEST1',
+    })
+
+    expect('error' in result).toBe(true)
+    expect((result as { error: string }).error).toContain('UUID')
+  })
+
+  it('虚拟 IP 重复返回错误', () => {
+    const result = registerGnbNode({
+      name: 'DUP-IP',
+      uuid: '00009002',
+      virtualIp: '10.1.0.1', // dev1 已用
+      nodeType: 'normal',
+      cryptoType: 'arc4',
+      passcode: '0xDUPTEST2',
+    })
+
+    expect('error' in result).toBe(true)
+    expect((result as { error: string }).error).toContain('IP')
+  })
+})
+
+// ============================================
+// GNB Passcode 更新
+// ============================================
+
+describe('GNB Passcode 更新', () => {
+  it('更新成功', () => {
+    const result = updateGnbPasscode('dev1', '0xNEWPASS1')
+    expect('error' in result).toBe(false)
+    const device = result as ReturnType<typeof getDeviceById> & { gnbConfig: { passcode: string } }
+    expect(device.gnbConfig.passcode).toBe('0xNEWPASS1')
+
+    // 还原
+    updateGnbPasscode('dev1', '0xA7B3C9D1')
+  })
+
+  it('设备不存在返回错误', () => {
+    const result = updateGnbPasscode('dev_nonexist', '0x12345678')
+    expect('error' in result).toBe(true)
+    expect((result as { error: string }).error).toContain('不存在')
+  })
+})
+
+// ============================================
+// 私域子网管理
+// ============================================
+
+describe('私域子网管理', () => {
+  it('查询私域列表', () => {
+    const subs = getSubnets()
+    expect(subs.length).toBeGreaterThanOrEqual(2) // 2 条预置
+  })
+
+  it('创建私域', () => {
+    const before = getSubnets().length
+    const sub = addSubnet({
+      name: '测试私域',
+      cidr: '10.1.99.0/24',
+      passcode: '0xTESTSUB1',
+    })
+    expect(sub.name).toBe('测试私域')
+    expect(sub.cidr).toBe('10.1.99.0/24')
+    expect(getSubnets().length).toBe(before + 1)
+
+    // 清理
+    removeSubnet(sub.id)
+  })
+
+  it('CIDR 匹配正确返回成员节点', () => {
+    // sub1 CIDR 10.1.0.0/24，dev1~dev6 虚拟 IP 都在 10.1.0.x
+    const members = getSubnetMembers('sub1')
+    expect(members.length).toBeGreaterThan(0)
+    for (const m of members) {
+      expect(m.gnbConfig.virtualIp.startsWith('10.1.0.')).toBe(true)
+    }
+  })
+
+  it('删除空私域成功', () => {
+    const sub = addSubnet({
+      name: '空私域',
+      cidr: '10.99.99.0/24', // 无节点匹配
+      passcode: '0xEMPTYSUB',
+    })
+
+    const result = removeSubnet(sub.id)
+    expect(result).toBe(true)
+  })
+
+  it('删除非空私域拒绝', () => {
+    // sub1 有成员节点
+    const result = removeSubnet('sub1')
+    expect(typeof result).toBe('object')
+    expect((result as { error: string }).error).toContain('节点')
+  })
+})
+

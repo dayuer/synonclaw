@@ -1,8 +1,8 @@
 // @alpha: 设备管理页面 — 管理员仅查看/配置/解除托管，不负责添加
 import { useState, useEffect, useCallback } from 'react'
-import { getDevices, getDeviceById, removeDevice, getDevicesByCustomerId } from '../data/mockData'
+import { getDevices, getDeviceById, removeDevice, getDevicesByCustomerId, maskPasscode } from '../data/mockData'
 import type { Device, DeviceStatus } from '../data/types'
-import { DEVICE_STATUS_LABELS, MODEL_PROVIDER_LABELS } from '../data/types'
+import { DEVICE_STATUS_LABELS, MODEL_PROVIDER_LABELS, GNB_CRYPTO_TYPE_LABELS, GNB_KEY_UPDATE_LABELS, NAT_TYPE_LABELS } from '../data/types'
 import DeviceConfigPage from './DeviceConfigPage'
 
 export default function DevicesPage() {
@@ -155,6 +155,52 @@ export default function DevicesPage() {
                     <span className="system-metric__label">运行中代理</span>
                     <span className="system-metric__value system-metric__value--accent">{selectedDevice.agentCount}</span>
                   </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* @alpha: GNB 安全面板 */}
+          <div className="admin-panel">
+            <div className="admin-panel__header">
+              <h2 className="admin-panel__title">🔐 GNB 安全</h2>
+            </div>
+            <div className="admin-panel__body">
+              <div className="admin-detail">
+                <div className="admin-detail__field">
+                  <div className="admin-detail__label">加密类型</div>
+                  <div className="admin-detail__value">{GNB_CRYPTO_TYPE_LABELS[selectedDevice.gnbConfig.cryptoType]}</div>
+                </div>
+                <div className="admin-detail__field">
+                  <div className="admin-detail__label">密钥轮换</div>
+                  <div className="admin-detail__value">{GNB_KEY_UPDATE_LABELS[selectedDevice.gnbConfig.keyUpdateInterval]}</div>
+                </div>
+                <div className="admin-detail__field">
+                  <div className="admin-detail__label">Passcode</div>
+                  <div className="admin-detail__value" style={{ fontFamily: 'var(--font-mono)' }}>{maskPasscode(selectedDevice.gnbConfig.passcode)}</div>
+                </div>
+                <div className="admin-detail__field">
+                  <div className="admin-detail__label">NTP 同步</div>
+                  <div className="admin-detail__value">
+                    {selectedDevice.gnbConfig.ntpSynced
+                      ? <span style={{ color: 'var(--color-accent-green)' }}>✓ 已同步</span>
+                      : <span style={{ color: 'var(--color-accent-yellow, #f0a030)' }}>✗ 未同步</span>
+                    }
+                  </div>
+                </div>
+                <div className="admin-detail__field">
+                  <div className="admin-detail__label">NAT 类型</div>
+                  <div className="admin-detail__value">{NAT_TYPE_LABELS[selectedDevice.gnbConfig.natType]}</div>
+                </div>
+              </div>
+              {selectedDevice.gnbConfig.keyUpdateInterval === 'none' && (
+                <div className="security-warning security-warning--red">
+                  ⚠️ 密钥轮换未激活，建议启用 MINUTE 模式
+                </div>
+              )}
+              {!selectedDevice.gnbConfig.ntpSynced && (
+                <div className="security-warning security-warning--yellow">
+                  ⚠️ NTP 未同步，MINUTE 模式下可能导致通信中断
                 </div>
               )}
             </div>

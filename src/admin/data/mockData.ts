@@ -5,6 +5,7 @@ import type {
   StatCard, SystemInfo, OrderStatus, CertLevel,
   Tenant, TenantMember, DigitalWorker, ActivityLog,
   Conversation, ChatMessage, RpcConfig,
+  GnbTunnel, GnbNodeConfig, Subnet,
 } from './types'
 import {
   ORDER_STATUS_FLOW, PLAN_LIMITS, DEFAULT_RPC_CONFIG,
@@ -234,6 +235,20 @@ const makeRpcConfig = (overrides: Partial<RpcConfig> = {}): RpcConfig => ({
   ...overrides,
 })
 
+// @alpha: GNB 节点配置工厂
+const makeGnbConfig = (overrides: Partial<GnbNodeConfig> = {}): GnbNodeConfig => ({
+  uuid: '00000000',
+  virtualIp: '10.1.0.0',
+  publicKey: 'a'.repeat(64),
+  nodeType: 'normal',
+  cryptoType: 'arc4',
+  keyUpdateInterval: 'minute',
+  passcode: '0xA7B3C9D1',
+  ntpSynced: true,
+  natType: 'full_cone',
+  ...overrides,
+})
+
 let devices: Device[] = [
   {
     id: 'dev1', tenantId: DEFAULT_TENANT_ID, name: 'TF-RACK-01',
@@ -242,6 +257,7 @@ let devices: Device[] = [
     endpoint: 'ws://10.0.1.10:3002', status: 'online', agentCount: 6,
     uptime: '28 天 12 小时', lastSeen: '2026-03-15 22:00', registeredAt: '2026-02-05',
     rpcConfig: makeRpcConfig({ modelProvider: 'openai', apiKey: 'sk-proj-****abcd', temperature: 0.7, systemPrompt: '你是腾飞科技的 AI 助手。' }),
+    gnbConfig: makeGnbConfig({ uuid: '00001001', virtualIp: '10.1.0.1', publicKey: 'a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd', nodeType: 'normal', natType: 'full_cone' }),
   },
   {
     id: 'dev2', tenantId: DEFAULT_TENANT_ID, name: 'TF-RACK-02',
@@ -250,6 +266,7 @@ let devices: Device[] = [
     endpoint: 'ws://10.0.1.11:3002', status: 'online', agentCount: 4,
     uptime: '28 天 12 小时', lastSeen: '2026-03-15 22:00', registeredAt: '2026-02-05',
     rpcConfig: makeRpcConfig({ modelProvider: 'anthropic', apiKey: 'sk-ant-****efgh', temperature: 0.5 }),
+    gnbConfig: makeGnbConfig({ uuid: '00001002', virtualIp: '10.1.0.2', publicKey: 'b2c3d4e5f6789012345678901234567890123456789012345678901234bcde', nodeType: 'index', natType: 'restricted_cone' }),
   },
   {
     id: 'dev3', tenantId: DEFAULT_TENANT_ID, name: 'YQ-RACK-01',
@@ -258,6 +275,7 @@ let devices: Device[] = [
     endpoint: 'ws://172.16.0.50:3002', status: 'online', agentCount: 3,
     uptime: '15 天 6 小时', lastSeen: '2026-03-15 21:55', registeredAt: '2026-02-18',
     rpcConfig: makeRpcConfig({ modelProvider: 'deepseek', apiKey: 'sk-ds-****ijkl' }),
+    gnbConfig: makeGnbConfig({ uuid: '00001003', virtualIp: '10.1.0.3', publicKey: 'c3d4e5f6789012345678901234567890123456789012345678901234cdef', nodeType: 'normal', cryptoType: 'xor', keyUpdateInterval: 'hour', natType: 'port_restricted' }),
   },
   {
     id: 'dev4', tenantId: DEFAULT_TENANT_ID, name: 'XM-DESK-01',
@@ -266,6 +284,7 @@ let devices: Device[] = [
     endpoint: 'ws://192.168.1.100:3002', status: 'online', agentCount: 2,
     uptime: '10 天 3 小时', lastSeen: '2026-03-15 21:50', registeredAt: '2026-03-01',
     rpcConfig: makeRpcConfig({ modelProvider: 'openai', apiKey: 'sk-proj-****mnop' }),
+    gnbConfig: makeGnbConfig({ uuid: '00001004', virtualIp: '10.1.0.4', publicKey: 'd4e5f6789012345678901234567890123456789012345678901234defg', nodeType: 'normal', natType: 'symmetric' }),
   },
   {
     id: 'dev5', tenantId: DEFAULT_TENANT_ID, name: 'XM-DESK-02',
@@ -274,6 +293,7 @@ let devices: Device[] = [
     endpoint: 'ws://192.168.1.101:3002', status: 'offline', agentCount: 0,
     uptime: '—', lastSeen: '2026-03-14 18:30', registeredAt: '2026-03-01',
     rpcConfig: makeRpcConfig(),
+    gnbConfig: makeGnbConfig({ uuid: '00001005', virtualIp: '10.1.0.5', publicKey: 'e5f6789012345678901234567890123456789012345678901234efgh', nodeType: 'normal', keyUpdateInterval: 'none', ntpSynced: false, natType: 'unknown' }),
   },
   {
     id: 'dev6', tenantId: DEFAULT_TENANT_ID, name: 'TF-DESK-01',
@@ -282,6 +302,7 @@ let devices: Device[] = [
     endpoint: 'ws://10.0.2.20:3002', status: 'error', agentCount: 0,
     uptime: '—', lastSeen: '2026-03-15 08:12', registeredAt: '2026-02-20',
     rpcConfig: makeRpcConfig(),
+    gnbConfig: makeGnbConfig({ uuid: '00001006', virtualIp: '10.1.0.6', publicKey: 'f6789012345678901234567890123456789012345678901234fghi', nodeType: 'forward', cryptoType: 'none', keyUpdateInterval: 'none', passcode: '0xFFFCFFFE' }),
   },
 ]
 
@@ -380,6 +401,74 @@ let conversations: Conversation[] = [
 ]
 
 // ============================================
+// GNB 隧道数据（新增）
+// ============================================
+
+// @alpha: 隧道 Mock 数据 — 4 条隧道，涵盖 active/degraded/down 三态
+const gnbTunnels: GnbTunnel[] = [
+  {
+    id: 'tun1', sourceNodeId: 'dev1', sourceNodeName: 'TF-RACK-01',
+    targetNodeId: 'dev2', targetNodeName: 'TF-RACK-02',
+    latency: 12, packetLoss: 0.1, uptime: '28 天',
+    cryptoType: 'arc4', status: 'active',
+  },
+  {
+    id: 'tun2', sourceNodeId: 'dev1', sourceNodeName: 'TF-RACK-01',
+    targetNodeId: 'dev3', targetNodeName: 'YQ-RACK-01',
+    latency: 45, packetLoss: 0.5, uptime: '15 天',
+    cryptoType: 'arc4', status: 'active',
+  },
+  {
+    id: 'tun3', sourceNodeId: 'dev2', sourceNodeName: 'TF-RACK-02',
+    targetNodeId: 'dev4', targetNodeName: 'XM-DESK-01',
+    latency: 250, packetLoss: 8.2, uptime: '10 天',
+    cryptoType: 'xor', status: 'degraded',
+  },
+  {
+    id: 'tun4', sourceNodeId: 'dev3', sourceNodeName: 'YQ-RACK-01',
+    targetNodeId: 'dev5', targetNodeName: 'XM-DESK-02',
+    latency: 0, packetLoss: 100, uptime: '—',
+    cryptoType: 'arc4', status: 'down',
+  },
+]
+
+// ============================================
+// 私域子网数据（新增）
+// ============================================
+
+// @alpha: 私域 CIDR 匹配工具 — 判断 IP 是否属于 CIDR 段
+const ipToCidrMatch = (ip: string, cidr: string): boolean => {
+  const [cidrIp, prefixStr] = cidr.split('/')
+  const prefix = parseInt(prefixStr, 10)
+  if (isNaN(prefix) || prefix < 0 || prefix > 32) return false
+
+  const ipToNum = (addr: string): number => {
+    const parts = addr.split('.').map(Number)
+    return ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0
+  }
+
+  const mask = prefix === 0 ? 0 : (~0 << (32 - prefix)) >>> 0
+  return (ipToNum(ip) & mask) === (ipToNum(cidrIp) & mask)
+}
+
+let subnets: Subnet[] = [
+  {
+    id: 'sub1',
+    name: '深圳办公网络',
+    cidr: '10.1.0.0/24',
+    passcode: '0xAA11BB22',
+    createdAt: '2026-02-01',
+  },
+  {
+    id: 'sub2',
+    name: '杭州分支网络',
+    cidr: '10.1.1.0/24',
+    passcode: '0xCC33DD44',
+    createdAt: '2026-02-15',
+  },
+]
+
+// ============================================
 // 系统信息
 // ============================================
 
@@ -392,6 +481,8 @@ const systemInfo: SystemInfo = {
   apiCalls: 128456,
   uptime: '32 天 14 小时',
   lastBackup: '2026-03-15 04:00:00',
+  gnbHealth: Math.round(gnbTunnels.filter(t => t.status === 'active').length / gnbTunnels.length * 100),
+  avgLatency: Math.round(gnbTunnels.filter(t => t.status !== 'down').reduce((s, t) => s + t.latency, 0) / gnbTunnels.filter(t => t.status !== 'down').length),
 }
 
 // ============================================
@@ -491,13 +582,40 @@ export const getConversationById = (id: string): Conversation | undefined => {
 // 查询函数 — 系统信息 / Dashboard
 // ============================================
 
-export const getSystemInfo = (): SystemInfo => ({
-  ...systemInfo,
-  nodeCount: devices.length,
-  onlineRate: devices.length > 0
-    ? Math.round(devices.filter(d => d.status === 'online').length / devices.length * 1000) / 10
-    : 0,
-})
+export const getSystemInfo = (): SystemInfo => {
+  const activeTunnels = gnbTunnels.filter(t => t.status === 'active')
+  const nonDownTunnels = gnbTunnels.filter(t => t.status !== 'down')
+  return {
+    ...systemInfo,
+    nodeCount: devices.length,
+    onlineRate: devices.length > 0
+      ? Math.round(devices.filter(d => d.status === 'online').length / devices.length * 1000) / 10
+      : 0,
+    gnbHealth: gnbTunnels.length > 0
+      ? Math.round(activeTunnels.length / gnbTunnels.length * 100)
+      : 0,
+    avgLatency: nonDownTunnels.length > 0
+      ? Math.round(nonDownTunnels.reduce((s, t) => s + t.latency, 0) / nonDownTunnels.length)
+      : 0,
+  }
+}
+
+// @alpha: GNB 隧道查询
+export const getGnbTunnels = (): GnbTunnel[] =>
+  gnbTunnels.map(t => ({ ...t }))
+
+// @alpha: GNB 网络健康度
+export const getGnbNetworkHealth = (): { totalTunnels: number; activeTunnels: number; avgLatency: number } => {
+  const active = gnbTunnels.filter(t => t.status === 'active').length
+  const nonDown = gnbTunnels.filter(t => t.status !== 'down')
+  return {
+    totalTunnels: gnbTunnels.length,
+    activeTunnels: active,
+    avgLatency: nonDown.length > 0
+      ? Math.round(nonDown.reduce((s, t) => s + t.latency, 0) / nonDown.length)
+      : 0,
+  }
+}
 
 export const getStatCards = (tenantId: string = DEFAULT_TENANT_ID): StatCard[] => {
   const tenantDevices = devices.filter(d => d.tenantId === tenantId)
@@ -507,8 +625,9 @@ export const getStatCards = (tenantId: string = DEFAULT_TENANT_ID): StatCard[] =
   return [
     { id: 's1', label: '托管设备', value: tenantDevices.length, icon: '🖥️', trend: 12.5, linkTo: '/admin/devices' },
     { id: 's2', label: '在线设备', value: tenantDevices.filter(d => d.status === 'online').length, icon: '🟢', trend: 8.3, linkTo: '/admin/devices' },
-    { id: 's3', label: '团队成员', value: tenantMembers.length, icon: '👥', trend: 15.0, linkTo: '/admin/members' },
-    { id: 's4', label: '数字员工', value: tenantWorkers.filter(w => w.status === 'active').length, icon: '🤖', trend: 20.0, linkTo: '/admin/workers' },
+    { id: 's3', label: '活跃隧道', value: gnbTunnels.filter(t => t.status === 'active').length, icon: '🌐', trend: 5.0, linkTo: '/admin/network' },
+    { id: 's4', label: '团队成员', value: tenantMembers.length, icon: '👥', trend: 15.0, linkTo: '/admin/members' },
+    { id: 's5', label: '数字员工', value: tenantWorkers.filter(w => w.status === 'active').length, icon: '🤖', trend: 20.0, linkTo: '/admin/workers' },
   ]
 }
 
@@ -625,7 +744,7 @@ export const canAddDevice = (tenantId: string = DEFAULT_TENANT_ID): { allowed: b
 }
 
 export const addDevice = (
-  device: Omit<Device, 'id' | 'registeredAt' | 'status' | 'agentCount' | 'uptime' | 'lastSeen' | 'rpcConfig'>,
+  device: Omit<Device, 'id' | 'registeredAt' | 'status' | 'agentCount' | 'uptime' | 'lastSeen' | 'rpcConfig' | 'gnbConfig'>,
 ): Device | { error: string } => {
   const quota = canAddDevice(device.tenantId)
   if (!quota.allowed) {
@@ -641,6 +760,7 @@ export const addDevice = (
     lastSeen: new Date().toLocaleString('zh-CN'),
     registeredAt: new Date().toISOString().split('T')[0],
     rpcConfig: makeRpcConfig(),
+    gnbConfig: makeGnbConfig(),
   }
   devices = [...devices, newDevice]
 
@@ -855,4 +975,151 @@ const addActivityLog = (tenantId: string, type: ActivityLog['type'], message: st
 export const maskApiKey = (key: string): string => {
   if (key.length <= 10) return '****'
   return key.slice(0, 6) + '****' + key.slice(-4)
+}
+
+// @alpha: Passcode 脱敏 — 保留前4后2
+export const maskPasscode = (passcode: string): string => {
+  if (passcode.length <= 4) return '****'
+  return passcode.slice(0, 4) + '****' + passcode.slice(-2)
+}
+
+// @alpha: 安全合规检查 — 检查所有设备是否符合审计建议
+export const checkGnbCompliance = (): { compliant: boolean; issues: Array<{ deviceName: string; issue: string }> } => {
+  const issues: Array<{ deviceName: string; issue: string }> = []
+  for (const d of devices) {
+    if (d.gnbConfig.cryptoType === 'none') {
+      issues.push({ deviceName: d.name, issue: '未启用加密' })
+    }
+    if (d.gnbConfig.keyUpdateInterval === 'none') {
+      issues.push({ deviceName: d.name, issue: '密钥轮换未激活' })
+    }
+    if (!d.gnbConfig.ntpSynced && d.gnbConfig.keyUpdateInterval !== 'none') {
+      issues.push({ deviceName: d.name, issue: 'NTP 未同步' })
+    }
+  }
+  return { compliant: issues.length === 0, issues }
+}
+
+// ============================================
+// GNB 操作函数（新增）
+// ============================================
+
+// @alpha: 注册 GNB 节点 — 创建新设备 + GNB 配置，含 UUID/IP 唯一性校验
+export const registerGnbNode = (
+  params: {
+    tenantId?: string
+    name: string
+    uuid: string
+    virtualIp: string
+    nodeType: GnbNodeConfig['nodeType']
+    cryptoType: GnbNodeConfig['cryptoType']
+    passcode: string
+  },
+): Device | { error: string } => {
+  const tid = params.tenantId || DEFAULT_TENANT_ID
+
+  // 配额校验
+  const quota = canAddDevice(tid)
+  if (!quota.allowed) {
+    return { error: `已达配额上限（${quota.current}/${quota.max}），请升级订阅计划` }
+  }
+
+  // UUID 唯一性
+  if (devices.some(d => d.gnbConfig.uuid === params.uuid)) {
+    return { error: 'UUID 已存在' }
+  }
+
+  // 虚拟 IP 唯一性
+  if (devices.some(d => d.gnbConfig.virtualIp === params.virtualIp)) {
+    return { error: '虚拟 IP 已被使用' }
+  }
+
+  const newDevice: Device = {
+    id: `dev${Date.now()}`,
+    tenantId: tid,
+    name: params.name,
+    customerId: '',
+    customerName: '',
+    productName: 'GNB 节点',
+    token: `gnb_${params.uuid.slice(-4)}_****`,
+    endpoint: '',
+    status: 'online',
+    agentCount: 0,
+    uptime: '刚刚注册',
+    lastSeen: new Date().toLocaleString('zh-CN'),
+    registeredAt: new Date().toISOString().split('T')[0],
+    rpcConfig: makeRpcConfig(),
+    gnbConfig: makeGnbConfig({
+      uuid: params.uuid,
+      virtualIp: params.virtualIp,
+      nodeType: params.nodeType,
+      cryptoType: params.cryptoType,
+      passcode: params.passcode,
+    }),
+  }
+
+  devices = [...devices, newDevice]
+  addActivityLog(tid, 'node_registered', `GNB 节点 ${params.name} (${params.uuid}) 已注册`)
+  return newDevice
+}
+
+// @alpha: 更新 GNB 节点 Passcode
+export const updateGnbPasscode = (
+  deviceId: string,
+  newPasscode: string,
+): Device | { error: string } => {
+  const device = devices.find(d => d.id === deviceId)
+  if (!device) return { error: '设备不存在' }
+
+  devices = devices.map(d =>
+    d.id === deviceId
+      ? { ...d, gnbConfig: { ...d.gnbConfig, passcode: newPasscode } }
+      : d
+  )
+
+  addActivityLog(device.tenantId, 'passcode_changed', `${device.name} Passcode 已更新`)
+  return devices.find(d => d.id === deviceId)!
+}
+
+// ============================================
+// 私域子网 CRUD（新增）
+// ============================================
+
+export const getSubnets = (): Subnet[] => subnets.map(s => ({ ...s }))
+
+export const addSubnet = (
+  params: { name: string; cidr: string; passcode: string },
+): Subnet => {
+  const sub: Subnet = {
+    id: `sub${Date.now()}`,
+    name: params.name,
+    cidr: params.cidr,
+    passcode: params.passcode,
+    createdAt: new Date().toISOString().split('T')[0],
+  }
+  subnets = [...subnets, sub]
+  addActivityLog(DEFAULT_TENANT_ID, 'subnet_created', `私域「${params.name}」已创建`)
+  return sub
+}
+
+// @alpha: 获取子网成员节点 — 通过 CIDR 匹配虚拟 IP
+export const getSubnetMembers = (subnetId: string): Device[] => {
+  const sub = subnets.find(s => s.id === subnetId)
+  if (!sub) return []
+  return devices.filter(d => ipToCidrMatch(d.gnbConfig.virtualIp, sub.cidr)).map(d => ({ ...d }))
+}
+
+// @alpha: 删除子网 — 仅空子网可删
+export const removeSubnet = (id: string): boolean | { error: string } => {
+  const sub = subnets.find(s => s.id === id)
+  if (!sub) return { error: '子网不存在' }
+
+  const memberCount = devices.filter(d => ipToCidrMatch(d.gnbConfig.virtualIp, sub.cidr)).length
+  if (memberCount > 0) {
+    return { error: `子网包含 ${memberCount} 个节点，仅空子网可删除` }
+  }
+
+  subnets = subnets.filter(s => s.id !== id)
+  addActivityLog(DEFAULT_TENANT_ID, 'subnet_removed', `私域「${sub.name}」已删除`)
+  return true
 }

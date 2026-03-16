@@ -18,10 +18,11 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: '设备与角色',
+    label: '网络与设备',
     adminOnly: true,
     items: [
-      { path: '/admin/devices', label: '设备管理', icon: '📡' },
+      { path: '/admin/devices', label: '设备管理', icon: '🖥️' },
+      { path: '/admin/network', label: '网络拓扑', icon: '🌐' },
       { path: '/admin/workers', label: '数字员工', icon: '🤖' },
     ],
   },

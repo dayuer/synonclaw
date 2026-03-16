@@ -145,6 +145,93 @@ export interface TenantMember {
 }
 
 // ============================================
+// GNB 网络域（新增）
+// ============================================
+
+// @alpha: GNB 节点类型 — 普通节点/信令节点/中继节点
+export type GnbNodeType = 'normal' | 'index' | 'forward'
+
+export const GNB_NODE_TYPE_LABELS: Record<GnbNodeType, string> = {
+  normal: '普通节点',
+  index: 'Index 信令',
+  forward: 'Forward 中继',
+}
+
+// @alpha: GNB 加密类型
+export type GnbCryptoType = 'arc4' | 'xor' | 'none'
+
+export const GNB_CRYPTO_TYPE_LABELS: Record<GnbCryptoType, string> = {
+  arc4: 'ARC4',
+  xor: 'XOR',
+  none: '无加密',
+}
+
+// @alpha: 密钥轮换间隔
+export type GnbKeyUpdateInterval = 'none' | 'hour' | 'minute'
+
+export const GNB_KEY_UPDATE_LABELS: Record<GnbKeyUpdateInterval, string> = {
+  none: '未启用',
+  hour: '每小时',
+  minute: '每分钟',
+}
+
+// @alpha: NAT 类型
+export type NatType = 'full_cone' | 'restricted_cone' | 'port_restricted' | 'symmetric' | 'unknown'
+
+export const NAT_TYPE_LABELS: Record<NatType, string> = {
+  full_cone: 'Full Cone',
+  restricted_cone: 'Restricted Cone',
+  port_restricted: 'Port Restricted',
+  symmetric: 'Symmetric',
+  unknown: '未知',
+}
+
+// @alpha: GNB 节点配置 — 每台设备的网络层属性
+export interface GnbNodeConfig {
+  uuid: string               // GNB 节点 UUID（4 字节 hex，如 '00001001'）
+  virtualIp: string          // 虚拟网络 IP，如 '10.1.0.1'
+  publicKey: string           // ED25519 公钥（64 字符 hex）
+  nodeType: GnbNodeType
+  cryptoType: GnbCryptoType
+  keyUpdateInterval: GnbKeyUpdateInterval
+  passcode: string            // 8 字符 hex，展示时脱敏
+  ntpSynced: boolean
+  natType: NatType
+}
+
+// @alpha: 隧道状态
+export type TunnelStatus = 'active' | 'degraded' | 'down'
+
+export const TUNNEL_STATUS_LABELS: Record<TunnelStatus, string> = {
+  active: '正常',
+  degraded: '降级',
+  down: '断开',
+}
+
+// @alpha: GNB 隧道 — 节点间加密通道
+export interface GnbTunnel {
+  id: string
+  sourceNodeId: string       // 关联设备 ID
+  sourceNodeName: string
+  targetNodeId: string
+  targetNodeName: string
+  latency: number            // ms
+  packetLoss: number         // %, 0~100
+  uptime: string
+  cryptoType: GnbCryptoType
+  status: TunnelStatus
+}
+
+// @alpha: GNB 私域子网 — 逻辑网络隔离单元
+export interface Subnet {
+  id: string
+  name: string
+  cidr: string              // 如 '10.1.0.0/24'
+  passcode: string          // 8 字符 hex (0xXXXXXXXX)
+  createdAt: string
+}
+
+// ============================================
 // 设备域（扩展）
 // ============================================
 
@@ -179,7 +266,7 @@ export interface RpcConfig {
   plugins: PluginConfig[]
 }
 
-// @alpha: 设备 = OpenClaw 实例，通过 Token 托管
+// @alpha: 设备 = OpenClaw 实例 + GNB 节点，通过 Token 托管
 export interface Device {
   id: string
   tenantId: string
@@ -195,6 +282,7 @@ export interface Device {
   lastSeen: string
   registeredAt: string
   rpcConfig: RpcConfig
+  gnbConfig: GnbNodeConfig   // @alpha: GNB 网络层配置
 }
 
 // ============================================
@@ -244,7 +332,7 @@ export interface Conversation {
 // 活动日志（新增）
 // ============================================
 
-export type ActivityType = 'device_added' | 'device_removed' | 'config_changed' | 'member_added' | 'worker_created' | 'conversation'
+export type ActivityType = 'device_added' | 'device_removed' | 'config_changed' | 'member_added' | 'worker_created' | 'conversation' | 'node_registered' | 'passcode_changed' | 'subnet_created' | 'subnet_removed'
 
 export interface ActivityLog {
   id: string
@@ -299,6 +387,8 @@ export interface SystemInfo {
   apiCalls: number
   uptime: string
   lastBackup: string
+  gnbHealth: number          // @alpha: 健康隧道占比 %, 0~100
+  avgLatency: number         // @alpha: 平均延迟 ms
 }
 
 export interface NavItem {
