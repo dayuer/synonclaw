@@ -41,15 +41,16 @@
                       │  Bridge :18790       │  │  Bridge :18790          │
                       └──────────────────────┘  └────────────────────────┘
 
-         ═══  GNB P2P 隧道（ED25519 端到端加密，同 Passcode 自动组网）
+         ═══  GNB P2P 隧道（ED25519 端到端加密，Safe Mode 非对称密钥认证）
 ```
 
 **关键概念**：
 
 - **Index 节点**：只做信令转发（类似 BT Tracker），不传输业务数据，极轻量
-- **Passcode**：32 位 hex 字符串（8 字符），相同 Passcode 的节点自动组网
+- **Safe Mode**：每个节点拥有 ED25519 密钥对，通过非对称加密交换通信密钥，安全性远高于 Lite 模式的 Passcode
 - **VIP**：虚拟 IP 地址，GNB 节点间通过 VIP 互相访问
 - **P2P**：节点间通过 NAT 穿透直连，Index 节点不中转数据
+- **配置目录**：每个节点有独立配置目录 `conf/$nodeid/`，包含 `node.conf`、`address.conf`、`route.conf`、`security/`（本节点密钥）、`ed25519/`（对端公钥）
 
 > [!TIP]
 > **性能优化：关闭节点探测 worker**  
@@ -83,7 +84,7 @@ make -f Makefile.Darwin install   # macOS
 ```
 
 > [!IMPORTANT]
-> **版本选择**：使用 `1.6.0.d` 或更新版本，旧版可能不支持 Lite 模式和 `--multi-socket` 参数。
+> **版本选择**：使用 `1.6.0.d` 或更新版本，旧版可能不支持 `--multi-socket` 参数。
 
 ### 2.2 各节点规划
 
@@ -93,9 +94,32 @@ make -f Makefile.Darwin install   # macOS
 | SaaS 客户端 | 1002 | 10.1.0.2 | UDP 9002 | 云服务器（与 Index 同机） |
 | 边缘设备 | 1001 | 10.1.0.1 | UDP 默认 | Mac mini |
 
-> [!WARNING]
-> **Lite 模式限制**：节点 ID 仅支持 `1001~1005` 范围。如果使用 `2001` 以上的 ID 会报错。
-> 正式版（非 Lite）需要配置 `node.conf` 和 `address.conf` 文件，ID 范围不受限。
+### 2.3 密钥管理（Safe Mode）
+
+Safe Mode 要求每个节点拥有 ED25519 密钥对，并交换公钥。
+
+```bash
+# 使用 gnb_crypto 生成密钥对
+gnb_crypto -c -p 1001.private -k 1001.public
+gnb_crypto -c -p 1002.private -k 1002.public
+```
+
+**目录结构**（以节点 1002 为例）：
+
+```
+/opt/gnb/conf/1002/
+├── node.conf            # 节点配置
+├── address.conf         # Index 地址列表
+├── route.conf           # 路由表
+├── security/
+│   ├── 1002.private     # 本节点私钥（不可泄露！）
+│   └── 1002.public      # 本节点公钥
+├── ed25519/
+│   └── 1001.public      # 对端节点公钥
+└── scripts/             # 启动/关闭后钩子脚本
+```
+
+**公钥交换规则**：节点 A 的 `ed25519/` 目录必须包含**所有**需要通信的对端节点的 `.public` 文件。
 
 ---
 
@@ -180,31 +204,60 @@ gnb-index-cn.synonclaw.com  →  43.156.128.95
 > [!IMPORTANT]
 > **同机部署 Index + 客户端时**，必须避免 TUN 设备名和端口冲突。
 
-### 4.1 启动客户端
+### 4.1 启动客户端（Safe Mode）
 
 ```bash
-/usr/local/sbin/gnb \
-  -n 1002 \
-  -I 43.156.128.95/9001 \
-  --multi-socket=on \
-  --node-detect-worker=off \
-  -p 1A2B3C4D \
+/usr/local/sbin/gnb -c /opt/gnb/conf/1002 \
   -i gnb_tun_test \
-  -l 0.0.0.0:9002 \
+  --crypto rc4 \
+  --crypto-key-update-interval hour \
+  --address-secure=on \
+  --console-log-level=3 \
   -d
 
 # 参数说明：
-#   -n 1002                  节点 ID
-#   -I 43.156.128.95/9001    Index 节点地址
-#   --multi-socket=on        多路并发 socket（提高穿透成功率）
-#   --node-detect-worker=off 关闭节点探测（双端公网 IP 无需 NAT 穿透探测）
-#   -p 1A2B3C4D              Passcode（32位 hex，8字符）
-#   -i gnb_tun_test          TUN 设备名（避免与 Index 冲突）
-#   -l 0.0.0.0:9002          监听端口（避免与 Index 的 9001 冲突）
-#   -d                       后台运行
+#   -c /opt/gnb/conf/1002             配置目录（包含 node.conf + 密钥）
+#   -i gnb_tun_test                   TUN 设备名（避免与 Index 冲突）
+#   --crypto rc4                      数据包加密算法（rc4 | xor | none）
+#   --crypto-key-update-interval hour 密钥每小时自动轮换
+#   --address-secure=on               日志中隐藏部分 IP 地址
+#   -d                                后台运行
 ```
 
-### 4.2 验证
+> [!NOTE]
+> `node.conf` 中已配置 `nodeid 1002`、`listen 9002`、`multi-socket on` 等参数，无需在命令行重复指定。
+
+### 4.2 systemd 持久化
+
+```ini
+# /etc/systemd/system/gnb-client.service
+[Unit]
+Description=GNB P2P Client Node (Safe Mode)
+After=network-online.target gnb-index.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/gnb -c /opt/gnb/conf/1002 \
+  -i gnb_tun_test \
+  --crypto rc4 \
+  --crypto-key-update-interval hour \
+  --address-secure=on \
+  --console-log-level=3 \
+  --log-file-path=/var/log/opengnb/client
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl enable gnb-client --now
+sudo systemctl status gnb-client
+```
+
+### 4.3 验证
 
 ```bash
 # 检查 TUN 设备
@@ -215,12 +268,12 @@ ip addr show gnb_tun_test
 ps aux | grep gnb
 ```
 
-### 4.3 同机部署注意事项
+### 4.4 同机部署注意事项
 
 | 问题 | 原因 | 解法 |
 |------|------|------|
 | TUN 设备冲突 | Index 和客户端默认都用 `gnb_tun` | 客户端使用 `-i gnb_tun_test` |
-| 端口冲突 | 都默认用 UDP 9001 | 客户端使用 `-l 0.0.0.0:9002` |
+| 端口冲突 | 都默认用 UDP 9001 | `node.conf` 中设定 `listen 9002` |
 
 ---
 
@@ -235,24 +288,21 @@ make -f Makefile.Darwin
 # 产出：~/gnb/gnb
 ```
 
-### 5.2 启动
+### 5.2 部署配置文件
 
 ```bash
-# 有公网 IP 的 VPS（无需 NAT 穿透）
-sudo ~/gnb/gnb \
-  -n 1001 \
-  -I "43.156.128.95/9001" \
-  --multi-socket=on \
-  --node-detect-worker=off \
-  -p 1A2B3C4D \
-  -d
+# 从云服务器拉取配置包
+scp root@www.synonclaw.com:/tmp/gnb-conf-1001.tar.gz ~/gnb/
+cd ~/gnb && tar xzf gnb-conf-1001.tar.gz
+```
 
-# 内网设备（需要 NAT 穿透）— 不加 --node-detect-worker=off
-sudo ~/gnb/gnb \
-  -n 1001 \
-  -I "43.156.128.95/9001" \
-  --multi-socket=on \
-  -p 1A2B3C4D \
+### 5.3 启动（Safe Mode）
+
+```bash
+sudo ~/gnb/gnb -c ~/gnb/conf/1001 \
+  --crypto rc4 \
+  --crypto-key-update-interval hour \
+  --address-secure=on \
   -d
 ```
 
@@ -503,10 +553,13 @@ cat ~/.openclaw/openclaw.json | python3 -m json.tool | grep token
 |------|-----|
 | Index 地址 | `43.156.128.95:9001` (`gnb-index-cn.synonclaw.com`) |
 | GNB 版本 | `1.6.0.d` |
-| Passcode | `1A2B3C4D` |
+| **运行模式** | **Safe Mode（ED25519 非对称加密）** |
+| **加密算法** | **RC4 + 密钥每小时自动轮换** |
+| 服务器配置目录 | `/opt/gnb/conf/1002/` |
 | 服务器 Node ID | `1002` |
 | 服务器 VIP | `10.1.0.2` |
 | 服务器 TUN 名 | `gnb_tun_test` |
+| Mac mini 配置目录 | `~/gnb/conf/1001/` |
 | Mac mini Node ID | `1001` |
 | Mac mini VIP | `10.1.0.1` |
 | Mac mini TUN 名 | `utun4`（动态分配） |
