@@ -5,7 +5,7 @@ import {
   assignWorkerToMember, getDevices, getMembers, getDeviceById,
 } from '../data/mockData'
 import type { DigitalWorker, Device, TenantMember } from '../data/types'
-import { DEVICE_STATUS_LABELS } from '../data/types'
+import { DEVICE_STATUS_LABELS, WORKER_TEMPLATES, WORKER_TEMPLATE_GROUPS } from '../data/types'
 
 interface WorkerForm {
   name: string
@@ -38,12 +38,28 @@ export default function WorkersPage() {
   const [errors, setErrors] = useState<Partial<Record<keyof WorkerForm, string>>>({})
   const [showAssign, setShowAssign] = useState(false)
   const [assignMemberIds, setAssignMemberIds] = useState<string[]>([])
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('')
 
   const devices: Device[] = getDevices()
   const members: TenantMember[] = getMembers()
 
   const refresh = useCallback(() => setWorkers(getDigitalWorkers()), [])
   useEffect(() => { refresh() }, [refresh])
+
+  // @alpha: 应用角色模板 — 自动填充表单
+  const applyTemplate = (templateId: string) => {
+    setSelectedTemplateId(templateId)
+    if (!templateId) return
+    const tpl = WORKER_TEMPLATES.find(t => t.id === templateId)
+    if (!tpl) return
+    setForm(prev => ({
+      ...prev,
+      name: tpl.name,
+      description: tpl.description,
+      systemPrompt: tpl.systemPrompt,
+      plugins: [...tpl.plugins],
+    }))
+  }
 
   const validate = (): boolean => {
     const e: typeof errors = {}
@@ -271,7 +287,7 @@ export default function WorkersPage() {
             {workers.length} 个数字员工
           </span>
           <button className="admin-btn admin-btn--primary" onClick={() => {
-            setEditId(null); setForm(EMPTY_FORM); setErrors({}); setShowModal(true)
+            setEditId(null); setForm(EMPTY_FORM); setErrors({}); setSelectedTemplateId(''); setShowModal(true)
           }}>
             + 创建数字员工
           </button>
@@ -329,6 +345,31 @@ export default function WorkersPage() {
               <button className="admin-modal__close" onClick={() => setShowModal(false)}>✕</button>
             </div>
             <div className="admin-modal__body">
+              {/* @alpha: 模板选择器 — 仅在创建模式显示 */}
+              {!editId && (
+                <div className="admin-form-group">
+                  <label className="admin-form-label">选择模板</label>
+                  <select
+                    className="admin-form-select"
+                    value={selectedTemplateId}
+                    onChange={e => applyTemplate(e.target.value)}
+                  >
+                    <option value="">自定义（空白创建）</option>
+                    {WORKER_TEMPLATE_GROUPS.map(group => (
+                      <optgroup key={group} label={group}>
+                        {WORKER_TEMPLATES.filter(t => t.group === group).map(t => (
+                          <option key={t.id} value={t.id}>{t.icon} {t.name}</option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                  {selectedTemplateId && (
+                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginTop: 'var(--space-xs)' }}>
+                      模板已填充表单，你仍可修改任意字段
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="admin-form-group">
                 <label className="admin-form-label">角色名 *</label>
                 <input

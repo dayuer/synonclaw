@@ -96,7 +96,7 @@ main.tsx → App.tsx
 | `AdminLayout.tsx` | Admin 主框架，管理 Sidebar 折叠状态，渲染嵌套子路由（10 个） |
 | `AdminSidebar.tsx` | 分组导航（概览/设备与角色/团队/运营）+ 路由高亮 + 折叠 + 移动端浮层 |
 | `AdminTopBar.tsx` | 系统标题 + 管理员头像 + 退出操作 |
-| `types.ts` | 全部领域实体类型 + 枚举标签映射 + 多租户/RPC/数字员工/GNB 网络/Subnet 私域类型 |
+| `types.ts` | 全部领域实体类型 + 枚举标签映射 + 多租户/RPC/数字员工/GNB 网络/Subnet 私域类型 + 角色模板 |
 | `mockData.ts` | 模拟数据存储 + 36+ 查询/变更函数 + GNB 节点注册/Passcode/子网CRUD/隧道/合规检查 |
 | `rpcClient.ts` | RPC 指令翻译中心 — config diff → 指令列表 + 校验 + 模拟执行 |
 | `admin.css` | Admin 完整视觉系统（布局/表格/表单/卡片/网络拓扑/安全警告/合规标识） |

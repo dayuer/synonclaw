@@ -5,6 +5,7 @@ import {
   MEMBER_ROLE_LABELS, MODEL_PROVIDER_LABELS, DEVICE_STATUS_LABELS,
   GNB_NODE_TYPE_LABELS, GNB_CRYPTO_TYPE_LABELS, GNB_KEY_UPDATE_LABELS,
   NAT_TYPE_LABELS, TUNNEL_STATUS_LABELS,
+  WORKER_TEMPLATES, WORKER_TEMPLATE_GROUPS,
 } from '../types'
 import {
   getTenant,
@@ -555,6 +556,50 @@ describe('私域子网管理', () => {
     const result = removeSubnet('sub1')
     expect(typeof result).toBe('object')
     expect((result as { error: string }).error).toContain('节点')
+  })
+})
+
+// ============================================
+// 数字员工角色模板
+// ============================================
+
+describe('数字员工角色模板', () => {
+  it('预置 8 个模板', () => {
+    expect(WORKER_TEMPLATES).toHaveLength(8)
+  })
+
+  it('覆盖 3 个分组', () => {
+    expect(WORKER_TEMPLATE_GROUPS).toHaveLength(3)
+    const groups = new Set(WORKER_TEMPLATES.map(t => t.group))
+    for (const g of WORKER_TEMPLATE_GROUPS) {
+      expect(groups.has(g)).toBe(true)
+    }
+  })
+
+  it('每个模板字段完整', () => {
+    for (const tpl of WORKER_TEMPLATES) {
+      expect(tpl.id).toBeTruthy()
+      expect(tpl.icon).toBeTruthy()
+      expect(tpl.name).toBeTruthy()
+      expect(tpl.description.length).toBeGreaterThan(5)
+      expect(tpl.systemPrompt.length).toBeGreaterThan(10)
+      expect(Array.isArray(tpl.plugins)).toBe(true)
+      expect(tpl.plugins.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('模板 ID 唯一', () => {
+    const ids = WORKER_TEMPLATES.map(t => t.id)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('模板插件引用合法', () => {
+    const validPlugins = DEFAULT_RPC_CONFIG.plugins.map(p => p.id)
+    for (const tpl of WORKER_TEMPLATES) {
+      for (const pluginId of tpl.plugins) {
+        expect(validPlugins).toContain(pluginId)
+      }
+    }
   })
 })
 
