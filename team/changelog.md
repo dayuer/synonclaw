@@ -1,25 +1,33 @@
-# Changelog
+# Changelog — SynonClaw 官网重新定义
 
-## 2026-03-16 — GNB 操作面板
+## [2026-03-17] 官网全站重新定义
 
 ### 新增
-
-- **节点注册**：网络页新增「注册节点」按钮 + 模态框（UUID/IP/类型/加密/Passcode 输入 + 客户端校验 + 服务端唯一性校验）
-- **Passcode Web 控制**：节点详情页 Passcode 字段增加「编辑」按钮，支持在线更新安全凭证（格式校验 `0xXXXXXXXX`）
-- **私域子网规划**：网络页新增第三个 Tab「私域」，支持创建/删除子网（名称/CIDR/Passcode），节点通过 CIDR 自动匹配归属子网
-- **`Subnet` 类型**：`types.ts` 新增私域子网接口
-- **6 个数据层函数**：`registerGnbNode`、`updateGnbPasscode`、`getSubnets`、`addSubnet`、`removeSubnet`、`getSubnetMembers`
-- **`ipToCidrMatch` 工具函数**：判断 IPv4 地址是否属于 CIDR 段
-- **10 个 TDD 测试用例**：覆盖节点注册（成功/UUID重复/IP重复）、Passcode 更新、子网 CRUD
+- **技术能力页** `/technology` — 安全架构可视化 + 方案对比表 + 四层全栈架构图
+- **产品线页** `/products` — Desk + Rack 并排对比 + 规格表 + 场景匹配器
+- **Canvas 网络动画** — 首页 Hero 粒子连线背景
+- **rAF 数字动画** — 社会证明区数字滚动
 
 ### 变更
+- **首页** — 核心定位重塑为「安全/可管控/统一知识库」
+- **AI 引擎定位** — 从纯本地调整为本地+云混合架构
+- **Navbar** — 导航重组为 产品/技术/生态/开发者/控制台
+- **Footer** — 五列布局（品牌/产品/技术/开发者/公司）
+- **软件生态页** — AI 引擎三能力 + 低代码平台三能力 + 工作流
+- **开发者页** — 新增技术文档入口卡片（API/SDK/CLI）+ GitHub 链接
 
-- **NetworkPage.tsx**：从只读双 Tab 拓扑展示升级为完整三 Tab GNB 操作面板
-- **`ActivityType`**：扩展 4 个事件类型（`node_registered` / `passcode_changed` / `subnet_created` / `subnet_removed`）
-- **`admin.css`**：新增 `subnet-grid` / `subnet-card` 样式集
-- **`AGENTS.md`**：同步更新架构文档
+### 删除
+- `/desk` 和 `/enterprise` 路由（重定向至 `/products`）
+- 所有内部技术栈名称（GNB/ARC4/XOR/OpenClaw/云兔）从官网文案中移除
 
-### 测试
+### 文件变更
 
-- 78 / 78 测试全绿
-- TypeScript 编译零错误
+| 操作 | 文件 |
+|------|------|
+| 重写 | `HomePage.tsx` + `HomePage.css` |
+| 重写 | `EcosystemPage.tsx` + `EcosystemPage.css` |
+| 重写 | `DeveloperPage.tsx` + `DeveloperPage.css` |
+| 重写 | `Navbar.tsx` + `Footer.tsx` |
+| 重写 | `App.tsx` |
+| 新增 | `TechnologyPage.tsx` + `TechnologyPage.css` |
+| 新增 | `ProductsPage.tsx` + `ProductsPage.css` |

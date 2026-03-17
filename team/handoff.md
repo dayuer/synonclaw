@@ -5,19 +5,23 @@
 | 来源角色 | PM |
 | 目标角色 | BA |
 | 状态 | CONTINUE |
-| 复杂度 | M |
+| 复杂度 | L |
 
 ### 本阶段完成事项
 
-- 需求分析：4 个用户故事（US-1~US-4），13 条验收标准
-- Sprint 规划：9 个任务，3 个里程碑
-- 复杂度判定：M 级（有新 API + 状态变迁 + 新 Tab）
+- 现有官网 5 页全量代码审计
+- 产品定位重塑（硬件终端 → 安全本地智能基础设施）
+- 需求文档 6 US / 26 AC（`team/requirements.md`）
+- Sprint 计划 9 任务 3 里程碑（`team/sprint.md`）
+- 页面路由重构方案（5 → 5 页，删 desk/enterprise，新增 technology/products）
 
 ### 下一阶段期望
 
-- 业务场景拆解（Happy Path + 异常链路）
-- 边界条件清单
-- 需求覆盖映射
+- BA 拆解业务场景，特别关注：
+  - 首页信息架构的漏斗转化路径
+  - GNB 技术页的技术内容深度（vs VPN/WireGuard 对比维度）
+  - 产品页 Desk vs Rack 的选型决策树
+- 产出 `team/ba-scenarios.md` + AC 覆盖映射
 
 ### 阻塞项
 

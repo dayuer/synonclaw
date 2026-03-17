@@ -1,28 +1,26 @@
-## 交接单
+# Alpha Notes — SynonClaw 官网重新定义
 
-| 字段 | 值 |
-|------|-----|
-| 来源角色 | Alpha |
-| 目标角色 | Beta |
-| 状态 | CONTINUE |
-| 复杂度 | M |
+## 技术决策
 
-### 本阶段完成事项
+1. **Canvas 网络动画** — 首页 Hero 使用 Canvas 实现粒子连线动画（40 节点 + 距离判定连线），轻量且视觉冲击。
+2. **rAF 数字动画** — 社会证明区数字基于 IntersectionObserver 触发 + requestAnimationFrame easeOut 动画。
+3. **路由重定向** — `/desk` 和 `/enterprise` 使用 `<Navigate replace>` 301 重定向至 `/products`，保护旧链接。
+4. **BEM CSS** — 每页独立 CSS，延续项目现有 BEM 命名 + design token 体系。
 
-- `types.ts` 新增 `Subnet` 接口 + 扩展 `ActivityType`（+4 事件类型）
-- `mockData.ts` 新增 6 个操作函数 + `ipToCidrMatch` CIDR 工具 + 2 条预置子网
-- `mockData.test.ts` 新增 3 组 10 个 TDD 用例
-- `NetworkPage.tsx` 完整重写为 GNB 操作面板（三 Tab + 注册模态框 + Passcode 编辑 + 私域卡片）
-- `admin.css` 新增 `subnet-grid`/`subnet-card` 样式
-- TypeScript 零错误，78/78 测试全绿
+## 用户反馈修正
 
-### 下一阶段期望 (Beta TODO)
+- 三支柱从技术能力（安全网络/AI引擎/低代码）调整为核心价值（**安全/可管控/统一知识库**）
+- AI 引擎定位从"纯本地"调整为**本地+云混合架构**（本地优先保安全，云端弹性降成本提可用性）
+- 所有页面去除内部技术栈名称（GNB/ARC4/XOR/OpenClaw/云兔）
 
-- @beta: 检查注册表单的 UUID hex 校验是否完整
-- @beta: 检查 Passcode 格式校验一致性（`0x` 前缀强制）
-- @beta: 验证 CIDR 匹配函数对边界输入的鲁棒性
-- @beta: 补充 UI 体验（按钮 loading 态、空态优化）
+## 测试结果
 
-### 阻塞项
+- `npx tsc --noEmit` → 零错误
+- `npm test` → 78/78 全绿
+- 浏览器 5 页面全部渲染验证通过
 
-- 无
+## Beta TODO
+
+- 响应式断点验证（320px / 768px / 1440px）
+- 旧页面文件清理（DeskPage.tsx + DeskPage.css + EnterprisePage.tsx + EnterprisePage.css）
+- Footer 社交链接真实 URL 补充

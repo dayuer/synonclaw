@@ -1,7 +1,8 @@
-// @alpha: GNB 操作面板 — 节点注册 + 状态监控 + Passcode 控制 + 私域子网规划
+// @alpha: GNB 操作面板 — AWS Console 风格
+// 参考 AWS VPC / EC2 控制台设计语言
 import { useState, useEffect, useCallback } from 'react'
 import {
-  getDevices, getGnbTunnels, maskPasscode,
+  getDevices, getGnbTunnels, maskPasscode, checkGnbCompliance,
   registerGnbNode, updateGnbPasscode,
   getSubnets, addSubnet, removeSubnet, getSubnetMembers,
 } from '../data/mockData'
@@ -12,6 +13,7 @@ import {
 } from '../data/types'
 
 type TabType = 'nodes' | 'tunnels' | 'subnets'
+type SplitTab = 'details' | 'security' | 'tunnels'
 
 export default function NetworkPage() {
   const [tab, setTab] = useState<TabType>('nodes')
@@ -19,13 +21,17 @@ export default function NetworkPage() {
   const [tunnels, setTunnels] = useState<GnbTunnel[]>([])
   const [subnetsData, setSubnetsData] = useState<Subnet[]>([])
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null)
+  const [splitTab, setSplitTab] = useState<SplitTab>('details')
   const [filterNodeType, setFilterNodeType] = useState<GnbNodeType | ''>('')
   const [filterStatus, setFilterStatus] = useState<string>('')
 
-  // 模态框状态
+  // 模态框
   const [showRegisterModal, setShowRegisterModal] = useState(false)
   const [showPasscodeEdit, setShowPasscodeEdit] = useState(false)
   const [showSubnetModal, setShowSubnetModal] = useState(false)
+
+  // Flash bar
+  const [flashDismissed, setFlashDismissed] = useState(false)
 
   // 注册表单
   const [regForm, setRegForm] = useState({
@@ -50,13 +56,9 @@ export default function NetworkPage() {
 
   useEffect(() => { refresh() }, [refresh])
 
-  // @alpha: UUID 截取末 8 位
-  const shortUuid = (uuid: string): string =>
-    uuid.length > 8 ? `…${uuid.slice(-8)}` : uuid || '—'
-
-  // @alpha: 公钥截取
-  const shortKey = (key: string): string =>
-    key.length > 16 ? `${key.slice(0, 8)}…${key.slice(-8)}` : key || '—'
+  // 合规检查
+  const compliance = checkGnbCompliance()
+  const hasWarnings = !compliance.compliant
 
   // 筛选节点
   const filteredNodes = devices.filter(d => {
@@ -74,80 +76,41 @@ export default function NetworkPage() {
     down: tunnels.filter(t => t.status === 'down').length,
   }
 
-  // @alpha: 隧道行样式判定 — 严格 >200ms 或 >5%
-  const tunnelRowClass = (t: GnbTunnel): string => {
-    if (t.status === 'down') return 'tunnel-row--down'
-    if (t.latency > 200 || t.packetLoss > 5) return 'tunnel-row--degraded'
-    return ''
-  }
-
-  // ============================================
-  // 节点注册
-  // ============================================
-
+  // 注册处理
   const handleRegister = () => {
     setRegError('')
-
-    // 客户端校验
     if (!regForm.name.trim()) { setRegError('节点名不能为空'); return }
     if (!/^[0-9a-fA-F]{8}$/.test(regForm.uuid)) { setRegError('UUID 必须为 8 位十六进制'); return }
     if (!/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(regForm.virtualIp)) { setRegError('请输入合法的 IPv4 地址'); return }
     if (!/^0x[0-9a-fA-F]{8}$/i.test(regForm.passcode)) { setRegError('Passcode 格式: 0x + 8位十六进制'); return }
 
-    const result = registerGnbNode({
-      name: regForm.name,
-      uuid: regForm.uuid,
-      virtualIp: regForm.virtualIp,
-      nodeType: regForm.nodeType,
-      cryptoType: regForm.cryptoType,
-      passcode: regForm.passcode,
-    })
+    const result = registerGnbNode(regForm)
+    if ('error' in result) { setRegError(result.error); return }
 
-    if ('error' in result) {
-      setRegError(result.error)
-      return
-    }
-
-    // 成功
     setShowRegisterModal(false)
     setRegForm({ name: '', uuid: '', virtualIp: '', nodeType: 'normal', cryptoType: 'arc4', passcode: '' })
     refresh()
   }
 
-  // ============================================
-  // Passcode 编辑
-  // ============================================
-
+  // Passcode 更新
   const handlePasscodeUpdate = () => {
     if (!selectedDevice) return
     setPasscodeError('')
-
-    if (!/^0x[0-9a-fA-F]{8}$/i.test(newPasscode)) {
-      setPasscodeError('格式: 0x + 8位十六进制')
-      return
-    }
+    if (!/^0x[0-9a-fA-F]{8}$/i.test(newPasscode)) { setPasscodeError('格式: 0x + 8位十六进制'); return }
 
     const result = updateGnbPasscode(selectedDevice.id, newPasscode)
-    if ('error' in result) {
-      setPasscodeError(result.error)
-      return
-    }
+    if ('error' in result) { setPasscodeError(result.error); return }
 
     setShowPasscodeEdit(false)
     setNewPasscode('')
-    // 刷新详情
     const updated = getDevices().find(d => d.id === selectedDevice.id)
     if (updated) setSelectedDevice(updated)
     refresh()
   }
 
-  // ============================================
-  // 子网管理
-  // ============================================
-
+  // 子网创建
   const handleAddSubnet = () => {
     setSubnetError('')
-
     if (!subnetForm.name.trim()) { setSubnetError('名称不能为空'); return }
     if (!/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/.test(subnetForm.cidr)) { setSubnetError('CIDR 格式: 如 10.1.0.0/24'); return }
     if (!/^0x[0-9a-fA-F]{8}$/i.test(subnetForm.passcode)) { setSubnetError('Passcode 格式: 0x + 8位十六进制'); return }
@@ -160,366 +123,123 @@ export default function NetworkPage() {
 
   const handleRemoveSubnet = (id: string) => {
     const result = removeSubnet(id)
-    if (typeof result === 'object' && 'error' in result) {
-      alert(result.error)
-      return
-    }
+    if (typeof result === 'object' && 'error' in result) { alert(result.error); return }
     refresh()
   }
 
-  // ============================================
-  // 节点详情面板
-  // ============================================
-
-  if (selectedDevice) {
-    const cfg = selectedDevice.gnbConfig
-    const relatedTunnels = tunnels.filter(
-      t => t.sourceNodeId === selectedDevice.id || t.targetNodeId === selectedDevice.id
-    )
-
-    return (
-      <div>
-        <div className="admin-breadcrumb">
-          <span className="admin-breadcrumb__item" onClick={() => setSelectedDevice(null)}>网络拓扑</span>
-          <span className="admin-breadcrumb__separator">/</span>
-          <span className="admin-breadcrumb__current">{selectedDevice.name}</span>
-        </div>
-
-        <div className="admin-page-header">
-          <h1 className="admin-page-header__title">
-            <span className={`status-badge status-badge--${selectedDevice.status}`} style={{ marginRight: 'var(--space-md)' }}>
-              <span className="status-badge__dot" />{DEVICE_STATUS_LABELS[selectedDevice.status]}
-            </span>
-            {selectedDevice.name}
-          </h1>
-          <p className="admin-page-header__subtitle">
-            {GNB_NODE_TYPE_LABELS[cfg.nodeType]} · {cfg.virtualIp}
-          </p>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-xl)' }}>
-          {/* GNB 节点信息 */}
-          <div className="admin-panel">
-            <div className="admin-panel__header">
-              <h2 className="admin-panel__title">🌐 GNB 节点信息</h2>
-            </div>
-            <div className="admin-panel__body">
-              <div className="admin-detail">
-                <div className="admin-detail__field">
-                  <div className="admin-detail__label">UUID</div>
-                  <div className="admin-detail__value" style={{ fontFamily: 'var(--font-mono)' }}>{cfg.uuid}</div>
-                </div>
-                <div className="admin-detail__field">
-                  <div className="admin-detail__label">虚拟 IP</div>
-                  <div className="admin-detail__value" style={{ fontFamily: 'var(--font-mono)' }}>{cfg.virtualIp}</div>
-                </div>
-                <div className="admin-detail__field">
-                  <div className="admin-detail__label">公钥</div>
-                  <div className="admin-detail__value" style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>
-                    {shortKey(cfg.publicKey)}
-                  </div>
-                </div>
-                <div className="admin-detail__field">
-                  <div className="admin-detail__label">NAT 类型</div>
-                  <div className="admin-detail__value">{NAT_TYPE_LABELS[cfg.natType]}</div>
-                </div>
-                <div className="admin-detail__field">
-                  <div className="admin-detail__label">关联设备</div>
-                  <div className="admin-detail__value">{selectedDevice.name} ({selectedDevice.productName})</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 安全配置 + Passcode 编辑 */}
-          <div className="admin-panel">
-            <div className="admin-panel__header">
-              <h2 className="admin-panel__title">🔐 安全配置</h2>
-            </div>
-            <div className="admin-panel__body">
-              <div className="admin-detail">
-                <div className="admin-detail__field">
-                  <div className="admin-detail__label">加密类型</div>
-                  <div className="admin-detail__value">{GNB_CRYPTO_TYPE_LABELS[cfg.cryptoType]}</div>
-                </div>
-                <div className="admin-detail__field">
-                  <div className="admin-detail__label">密钥轮换</div>
-                  <div className="admin-detail__value">{GNB_KEY_UPDATE_LABELS[cfg.keyUpdateInterval]}</div>
-                </div>
-                <div className="admin-detail__field">
-                  <div className="admin-detail__label">Passcode</div>
-                  <div className="admin-detail__value" style={{ fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
-                    {maskPasscode(cfg.passcode)}
-                    <button
-                      className="admin-btn admin-btn--ghost admin-btn--sm"
-                      onClick={() => { setShowPasscodeEdit(true); setNewPasscode(''); setPasscodeError('') }}
-                    >
-                      ✏️ 编辑
-                    </button>
-                  </div>
-                </div>
-                <div className="admin-detail__field">
-                  <div className="admin-detail__label">NTP 同步</div>
-                  <div className="admin-detail__value">
-                    {cfg.ntpSynced
-                      ? <span style={{ color: 'var(--color-accent-green)' }}>✓ 已同步</span>
-                      : <span style={{ color: 'var(--color-accent-yellow, #f0a030)' }}>✗ 未同步</span>
-                    }
-                  </div>
-                </div>
-              </div>
-              {cfg.keyUpdateInterval === 'none' && (
-                <div className="security-warning security-warning--red">
-                  ⚠️ 密钥轮换未激活，建议启用 MINUTE 模式
-                </div>
-              )}
-              {!cfg.ntpSynced && (
-                <div className="security-warning security-warning--yellow">
-                  ⚠️ NTP 未同步，MINUTE 模式下可能导致通信中断
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Passcode 编辑弹窗 */}
-          {showPasscodeEdit && (
-            <div className="admin-modal-overlay" onClick={() => setShowPasscodeEdit(false)}>
-              <div className="admin-modal" onClick={e => e.stopPropagation()}>
-                <div className="admin-modal__header">
-                  <h3 className="admin-modal__title">编辑 Passcode</h3>
-                  <button className="admin-modal__close" onClick={() => setShowPasscodeEdit(false)}>×</button>
-                </div>
-                <div className="admin-modal__body">
-                  <p style={{ color: 'var(--color-text-muted)', marginBottom: 'var(--space-md)', fontSize: 'var(--text-small)' }}>
-                    当前: <code>{maskPasscode(cfg.passcode)}</code>
-                  </p>
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">新 Passcode</label>
-                    <input
-                      className="admin-form-input"
-                      placeholder="0xXXXXXXXX（8位十六进制）"
-                      value={newPasscode}
-                      onChange={e => setNewPasscode(e.target.value)}
-                    />
-                  </div>
-                  {passcodeError && <div className="admin-form-error">{passcodeError}</div>}
-                </div>
-                <div className="admin-modal__footer">
-                  <button className="admin-btn admin-btn--ghost" onClick={() => setShowPasscodeEdit(false)}>取消</button>
-                  <button className="admin-btn admin-btn--primary" onClick={handlePasscodeUpdate}>保存</button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 关联隧道 */}
-          <div className="admin-panel" style={{ gridColumn: '1 / -1' }}>
-            <div className="admin-panel__header">
-              <h2 className="admin-panel__title">🔗 关联隧道 ({relatedTunnels.length})</h2>
-            </div>
-            {relatedTunnels.length === 0 ? (
-              <div className="admin-panel__body">
-                <div className="admin-empty" style={{ padding: 'var(--space-xl)' }}>
-                  <p className="admin-empty__title">无关联隧道</p>
-                </div>
-              </div>
-            ) : (
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>对端节点</th>
-                    <th>延迟</th>
-                    <th>丢包率</th>
-                    <th>加密</th>
-                    <th>状态</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {relatedTunnels.map(t => {
-                    const peerName = t.sourceNodeId === selectedDevice.id ? t.targetNodeName : t.sourceNodeName
-                    return (
-                      <tr key={t.id} className={tunnelRowClass(t)}>
-                        <td style={{ fontWeight: 600 }}>{peerName}</td>
-                        <td style={{ fontFamily: 'var(--font-mono)' }}>{t.status === 'down' ? '—' : `${t.latency}ms`}</td>
-                        <td style={{ fontFamily: 'var(--font-mono)' }}>{t.status === 'down' ? '—' : `${t.packetLoss}%`}</td>
-                        <td>{GNB_CRYPTO_TYPE_LABELS[t.cryptoType]}</td>
-                        <td>
-                          <span className={`status-badge status-badge--${t.status === 'active' ? 'online' : t.status === 'degraded' ? 'error' : 'offline'}`}>
-                            <span className="status-badge__dot" />{TUNNEL_STATUS_LABELS[t.status]}
-                          </span>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // ============================================
-  // 主列表视图 — 三 Tab
-  // ============================================
+  // 节点详情 — AWS Split Panel 而非全屏切换
+  const relatedTunnels = selectedDevice
+    ? tunnels.filter(t => t.sourceNodeId === selectedDevice.id || t.targetNodeId === selectedDevice.id)
+    : []
 
   return (
     <div>
-      <div className="admin-page-header">
-        <h1 className="admin-page-header__title">GNB 操作面板</h1>
-        <p className="admin-page-header__subtitle">节点注册 · 状态监控 · Passcode 控制 · 私域规划</p>
+      {/* ===== AWS Service Header ===== */}
+      <div className="aws-header">
+        <div className="aws-header__left">
+          <span className="aws-header__service">GNB Virtual Network</span>
+          <h1 className="aws-header__title">
+            GNB 操作面板
+            <span className="aws-header__count">
+              {devices.length} 节点 · {tunnels.length} 隧道 · {subnetsData.length} 私域
+            </span>
+          </h1>
+        </div>
+        <div className="aws-header__actions">
+          <button className="aws-btn aws-btn--icon" onClick={refresh} title="刷新">⟳</button>
+          {tab === 'nodes' && (
+            <button className="aws-btn aws-btn--primary" onClick={() => { setShowRegisterModal(true); setRegError('') }}>
+              注册节点
+            </button>
+          )}
+          {tab === 'subnets' && (
+            <button className="aws-btn aws-btn--primary" onClick={() => { setShowSubnetModal(true); setSubnetError('') }}>
+              创建私域
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Tab 切换 */}
-      <div className="network-tabs" style={{ marginBottom: 'var(--space-xl)' }}>
-        <button
-          className={`network-tab ${tab === 'nodes' ? 'network-tab--active' : ''}`}
-          onClick={() => setTab('nodes')}
-        >
-          🖥️ 节点 ({devices.length})
+      {/* ===== AWS Flash Bar — 合规警告 ===== */}
+      {hasWarnings && !flashDismissed && (
+        <div className="aws-flashbar aws-flashbar--warning">
+          <span className="aws-flashbar__icon">⚠</span>
+          <div className="aws-flashbar__content">
+            <strong>安全合规提醒</strong> — {compliance.issues.map(i => `${i.deviceName}: ${i.issue}`).join('；')}
+          </div>
+          <button className="aws-flashbar__dismiss" onClick={() => setFlashDismissed(true)}>×</button>
+        </div>
+      )}
+
+      {/* ===== AWS Tabs ===== */}
+      <div className="aws-tabs">
+        <button className={`aws-tab ${tab === 'nodes' ? 'aws-tab--active' : ''}`} onClick={() => { setTab('nodes'); setSelectedDevice(null) }}>
+          节点 <span className="aws-tab__badge">{devices.length}</span>
         </button>
-        <button
-          className={`network-tab ${tab === 'tunnels' ? 'network-tab--active' : ''}`}
-          onClick={() => setTab('tunnels')}
-        >
-          🔗 隧道 ({tunnels.length})
+        <button className={`aws-tab ${tab === 'tunnels' ? 'aws-tab--active' : ''}`} onClick={() => { setTab('tunnels'); setSelectedDevice(null) }}>
+          隧道 <span className="aws-tab__badge">{tunnels.length}</span>
         </button>
-        <button
-          className={`network-tab ${tab === 'subnets' ? 'network-tab--active' : ''}`}
-          onClick={() => setTab('subnets')}
-        >
-          🏢 私域 ({subnetsData.length})
+        <button className={`aws-tab ${tab === 'subnets' ? 'aws-tab--active' : ''}`} onClick={() => { setTab('subnets'); setSelectedDevice(null) }}>
+          子网 (VPC) <span className="aws-tab__badge">{subnetsData.length}</span>
         </button>
       </div>
 
       {/* ===== 节点 Tab ===== */}
       {tab === 'nodes' && (
-        <div className="admin-table-wrapper">
-          <div className="admin-table-toolbar">
-            <div className="admin-table-toolbar__left">
-              <select className="admin-form-select" value={filterNodeType} onChange={e => setFilterNodeType(e.target.value as GnbNodeType | '')} style={{ width: 140 }}>
+        <div className="aws-container">
+          <div className="aws-action-bar">
+            <div className="aws-action-bar__left">
+              <select className="admin-form-select" value={filterNodeType} onChange={e => setFilterNodeType(e.target.value as GnbNodeType | '')} style={{ width: 130, fontSize: 'var(--text-xs)', padding: '4px 8px' }}>
                 <option value="">全部类型</option>
                 <option value="normal">普通节点</option>
                 <option value="index">Index 信令</option>
                 <option value="forward">Forward 中继</option>
               </select>
-              <select className="admin-form-select" value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ width: 120 }}>
+              <select className="admin-form-select" value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ width: 110, fontSize: 'var(--text-xs)', padding: '4px 8px' }}>
                 <option value="">全部状态</option>
                 <option value="online">在线</option>
                 <option value="offline">离线</option>
               </select>
-              <span style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-small)' }}>
-                {filteredNodes.length} / {devices.length} 个节点
+              <span className="aws-action-bar__info">
+                显示 {filteredNodes.length} / {devices.length}
               </span>
             </div>
-            <div className="admin-table-toolbar__right">
-              <button className="admin-btn admin-btn--primary" onClick={() => { setShowRegisterModal(true); setRegError('') }}>
-                ＋ 注册节点
-              </button>
-            </div>
           </div>
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>节点名</th>
-                <th>UUID</th>
-                <th>虚拟 IP</th>
-                <th>类型</th>
-                <th>加密</th>
-                <th>状态</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredNodes.length === 0 ? (
-                <tr><td colSpan={7}>
-                  <div className="admin-empty">
-                    <div className="admin-empty__icon">🌐</div>
-                    <p className="admin-empty__title">暂无节点</p>
-                    <p className="admin-empty__desc">点击「注册节点」添加 GNB 节点</p>
-                  </div>
-                </td></tr>
-              ) : filteredNodes.map(d => (
-                <tr key={d.id}>
-                  <td style={{ fontWeight: 600 }}>{d.name}</td>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>{shortUuid(d.gnbConfig.uuid)}</td>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>{d.gnbConfig.virtualIp}</td>
-                  <td>{GNB_NODE_TYPE_LABELS[d.gnbConfig.nodeType]}</td>
-                  <td>{GNB_CRYPTO_TYPE_LABELS[d.gnbConfig.cryptoType]}</td>
-                  <td>
-                    <span className={`status-badge status-badge--${d.status}`}>
-                      <span className="status-badge__dot" />{DEVICE_STATUS_LABELS[d.status]}
-                    </span>
-                  </td>
-                  <td>
-                    <button className="admin-btn admin-btn--ghost admin-btn--sm" onClick={() => setSelectedDevice(d)}>详情</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* ===== 隧道 Tab ===== */}
-      {tab === 'tunnels' && (
-        <div>
-          {/* 隧道概览 */}
-          <div className="stat-cards" style={{ marginBottom: 'var(--space-xl)' }}>
-            <div className="stat-card" style={{ cursor: 'default' }}>
-              <p className="stat-card__value">{tunnelStats.total}</p>
-              <p className="stat-card__label">总隧道</p>
-            </div>
-            <div className="stat-card" style={{ cursor: 'default' }}>
-              <p className="stat-card__value" style={{ color: 'var(--color-accent-green)' }}>{tunnelStats.active}</p>
-              <p className="stat-card__label">正常</p>
-            </div>
-            <div className="stat-card" style={{ cursor: 'default' }}>
-              <p className="stat-card__value" style={{ color: 'var(--color-accent-yellow, #f0a030)' }}>{tunnelStats.degraded}</p>
-              <p className="stat-card__label">降级</p>
-            </div>
-            <div className="stat-card" style={{ cursor: 'default' }}>
-              <p className="stat-card__value" style={{ color: 'var(--color-accent-red)' }}>{tunnelStats.down}</p>
-              <p className="stat-card__label">断开</p>
-            </div>
-          </div>
-
-          <div className="admin-table-wrapper">
-            <table className="admin-table">
+          <div className="aws-table-wrapper">
+            <table className="aws-table">
               <thead>
                 <tr>
-                  <th>源节点</th>
-                  <th>→</th>
-                  <th>目标节点</th>
-                  <th>延迟</th>
-                  <th>丢包率</th>
-                  <th>运行时长</th>
-                  <th>加密</th>
+                  <th>节点名称</th>
+                  <th>UUID</th>
+                  <th>虚拟 IP</th>
+                  <th>节点类型</th>
+                  <th>加密算法</th>
+                  <th>NAT</th>
                   <th>状态</th>
                 </tr>
               </thead>
               <tbody>
-                {tunnels.length === 0 ? (
-                  <tr><td colSpan={8}>
-                    <div className="admin-empty">
-                      <div className="admin-empty__icon">🔗</div>
-                      <p className="admin-empty__title">暂无隧道</p>
-                      <p className="admin-empty__desc">节点间建立连接后隧道将自动出现</p>
-                    </div>
+                {filteredNodes.length === 0 ? (
+                  <tr><td colSpan={7} style={{ textAlign: 'center', padding: 'var(--space-3xl)', color: 'var(--color-text-muted)' }}>
+                    暂无匹配节点
                   </td></tr>
-                ) : tunnels.map(t => (
-                  <tr key={t.id} className={tunnelRowClass(t)}>
-                    <td style={{ fontWeight: 600 }}>{t.sourceNodeName}</td>
-                    <td style={{ textAlign: 'center', color: 'var(--color-text-muted)' }}>→</td>
-                    <td style={{ fontWeight: 600 }}>{t.targetNodeName}</td>
-                    <td style={{ fontFamily: 'var(--font-mono)' }}>{t.status === 'down' ? '—' : `${t.latency}ms`}</td>
-                    <td style={{ fontFamily: 'var(--font-mono)' }}>{t.status === 'down' ? '—' : `${t.packetLoss}%`}</td>
-                    <td>{t.uptime}</td>
-                    <td>{GNB_CRYPTO_TYPE_LABELS[t.cryptoType]}</td>
+                ) : filteredNodes.map(d => (
+                  <tr
+                    key={d.id}
+                    className={selectedDevice?.id === d.id ? 'aws-table__row--selected' : ''}
+                    onClick={() => { setSelectedDevice(d); setSplitTab('details') }}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <td className="aws-table__cell--name">{d.name}</td>
+                    <td className="aws-table__cell--mono">{d.gnbConfig.uuid}</td>
+                    <td className="aws-table__cell--mono">{d.gnbConfig.virtualIp}</td>
+                    <td>{GNB_NODE_TYPE_LABELS[d.gnbConfig.nodeType]}</td>
+                    <td>{GNB_CRYPTO_TYPE_LABELS[d.gnbConfig.cryptoType]}</td>
+                    <td style={{ fontSize: 'var(--text-xs)' }}>{NAT_TYPE_LABELS[d.gnbConfig.natType]}</td>
                     <td>
-                      <span className={`status-badge status-badge--${t.status === 'active' ? 'online' : t.status === 'degraded' ? 'error' : 'offline'}`}>
-                        <span className="status-badge__dot" />{TUNNEL_STATUS_LABELS[t.status]}
+                      <span className={`aws-status aws-status--${d.status}`}>
+                        <span className="aws-status__dot" />
+                        {DEVICE_STATUS_LABELS[d.status]}
                       </span>
                     </td>
                   </tr>
@@ -527,67 +247,135 @@ export default function NetworkPage() {
               </tbody>
             </table>
           </div>
+          <div className="aws-container__footer">
+            上次刷新: {new Date().toLocaleTimeString('zh-CN')}
+          </div>
         </div>
       )}
 
-      {/* ===== 私域 Tab ===== */}
-      {tab === 'subnets' && (
+      {/* ===== 隧道 Tab ===== */}
+      {tab === 'tunnels' && (
         <div>
-          <div className="admin-table-toolbar" style={{ marginBottom: 'var(--space-lg)' }}>
-            <div className="admin-table-toolbar__left">
-              <span style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-small)' }}>
-                {subnetsData.length} 个私域子网
-              </span>
+          {/* 概览卡片 */}
+          <div className="aws-overview-cards">
+            <div className="aws-overview-card">
+              <p className="aws-overview-card__value">{tunnelStats.total}</p>
+              <p className="aws-overview-card__label">总隧道</p>
             </div>
-            <div className="admin-table-toolbar__right">
-              <button className="admin-btn admin-btn--primary" onClick={() => { setShowSubnetModal(true); setSubnetError('') }}>
-                ＋ 创建私域
-              </button>
+            <div className="aws-overview-card">
+              <p className="aws-overview-card__value" style={{ color: '#44dd88' }}>{tunnelStats.active}</p>
+              <p className="aws-overview-card__label">正常 (Active)</p>
+            </div>
+            <div className="aws-overview-card">
+              <p className="aws-overview-card__value" style={{ color: '#ffcc44' }}>{tunnelStats.degraded}</p>
+              <p className="aws-overview-card__label">降级 (Degraded)</p>
+            </div>
+            <div className="aws-overview-card">
+              <p className="aws-overview-card__value" style={{ color: '#ff5050' }}>{tunnelStats.down}</p>
+              <p className="aws-overview-card__label">断开 (Down)</p>
             </div>
           </div>
 
+          <div className="aws-container">
+            <div className="aws-container__header">
+              <h2 className="aws-container__title">
+                隧道列表
+                <span className="aws-container__title-count">({tunnels.length})</span>
+              </h2>
+            </div>
+            <div className="aws-container__body--flush">
+              <table className="aws-table">
+                <thead>
+                  <tr>
+                    <th>源节点</th>
+                    <th></th>
+                    <th>目标节点</th>
+                    <th>延迟</th>
+                    <th>丢包率</th>
+                    <th>运行时长</th>
+                    <th>加密</th>
+                    <th>状态</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tunnels.length === 0 ? (
+                    <tr><td colSpan={8} style={{ textAlign: 'center', padding: 'var(--space-3xl)', color: 'var(--color-text-muted)' }}>
+                      暂无隧道连接
+                    </td></tr>
+                  ) : tunnels.map(t => (
+                    <tr key={t.id} className={t.status === 'down' ? 'tunnel-row--down' : t.latency > 200 || t.packetLoss > 5 ? 'tunnel-row--degraded' : ''}>
+                      <td style={{ fontWeight: 600 }}>{t.sourceNodeName}</td>
+                      <td style={{ textAlign: 'center', color: 'var(--color-text-muted)', fontSize: 'var(--text-xs)' }}>→</td>
+                      <td style={{ fontWeight: 600 }}>{t.targetNodeName}</td>
+                      <td className="aws-table__cell--mono">{t.status === 'down' ? '—' : `${t.latency}ms`}</td>
+                      <td className="aws-table__cell--mono">{t.status === 'down' ? '—' : `${t.packetLoss}%`}</td>
+                      <td>{t.uptime}</td>
+                      <td>{GNB_CRYPTO_TYPE_LABELS[t.cryptoType]}</td>
+                      <td>
+                        <span className={`aws-status aws-status--${t.status}`}>
+                          <span className="aws-status__dot" />
+                          {TUNNEL_STATUS_LABELS[t.status]}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== 子网 Tab ===== */}
+      {tab === 'subnets' && (
+        <div>
           {subnetsData.length === 0 ? (
-            <div className="admin-empty" style={{ padding: 'var(--space-3xl)' }}>
-              <div className="admin-empty__icon">🏢</div>
-              <p className="admin-empty__title">暂无私域子网</p>
-              <p className="admin-empty__desc">创建私域将节点隔离到独立虚拟网络</p>
+            <div className="aws-container">
+              <div className="aws-container__body" style={{ textAlign: 'center', padding: 'var(--space-3xl)' }}>
+                <p style={{ fontSize: 'var(--text-h3)', marginBottom: 'var(--space-sm)' }}>🏢</p>
+                <p style={{ color: 'var(--color-text-muted)' }}>暂无私域子网，点击上方「创建私域」按钮创建</p>
+              </div>
             </div>
           ) : (
             <div className="subnet-grid">
               {subnetsData.map(sub => {
                 const members = getSubnetMembers(sub.id)
                 return (
-                  <div key={sub.id} className="subnet-card">
-                    <div className="subnet-card__header">
-                      <h3 className="subnet-card__title">{sub.name}</h3>
-                      <button
-                        className="admin-btn admin-btn--ghost admin-btn--sm subnet-card__delete"
-                        onClick={() => handleRemoveSubnet(sub.id)}
-                        title="删除私域"
-                      >
-                        🗑️
-                      </button>
+                  <div key={sub.id} className="aws-container" style={{ marginBottom: 0 }}>
+                    <div className="aws-container__header">
+                      <h3 className="aws-container__title">{sub.name}</h3>
+                      <div className="aws-container__actions">
+                        <button className="aws-btn aws-btn--icon" onClick={() => handleRemoveSubnet(sub.id)} title="删除">🗑</button>
+                      </div>
                     </div>
-                    <div className="subnet-card__body">
-                      <div className="subnet-card__field">
-                        <span className="subnet-card__label">CIDR</span>
-                        <span className="subnet-card__value" style={{ fontFamily: 'var(--font-mono)' }}>{sub.cidr}</span>
-                      </div>
-                      <div className="subnet-card__field">
-                        <span className="subnet-card__label">Passcode</span>
-                        <span className="subnet-card__value" style={{ fontFamily: 'var(--font-mono)' }}>{maskPasscode(sub.passcode)}</span>
-                      </div>
-                      <div className="subnet-card__field">
-                        <span className="subnet-card__label">成员节点</span>
-                        <span className="subnet-card__value">{members.length} 个</span>
+                    <div className="aws-container__body">
+                      <div className="aws-kv">
+                        <div className="aws-kv__item">
+                          <span className="aws-kv__label">CIDR</span>
+                          <span className="aws-kv__value aws-kv__value--mono">{sub.cidr}</span>
+                        </div>
+                        <div className="aws-kv__item">
+                          <span className="aws-kv__label">Passcode</span>
+                          <span className="aws-kv__value aws-kv__value--mono">{maskPasscode(sub.passcode)}</span>
+                        </div>
+                        <div className="aws-kv__item">
+                          <span className="aws-kv__label">成员节点</span>
+                          <span className="aws-kv__value">{members.length} 个节点</span>
+                        </div>
+                        <div className="aws-kv__item">
+                          <span className="aws-kv__label">创建时间</span>
+                          <span className="aws-kv__value">{new Date(sub.createdAt).toLocaleDateString('zh-CN')}</span>
+                        </div>
                       </div>
                     </div>
                     {members.length > 0 && (
-                      <div className="subnet-card__members">
+                      <div className="aws-container__footer" style={{ fontSize: 'var(--text-xs)' }}>
                         {members.map(m => (
-                          <span key={m.id} className="subnet-card__member-badge">
-                            <span className={`status-badge__dot status-badge__dot--${m.status}`} />
-                            {m.name}
+                          <span key={m.id} style={{ marginRight: 'var(--space-md)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <span className={`aws-status aws-status--${m.status}`}>
+                              <span className="aws-status__dot" />
+                              {m.name}
+                            </span>
                           </span>
                         ))}
                       </div>
@@ -597,6 +385,163 @@ export default function NetworkPage() {
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ===== AWS Split Panel — 节点详情 ===== */}
+      {selectedDevice && (
+        <div className="aws-split-panel">
+          <div className="aws-split-panel__header">
+            <h3 className="aws-split-panel__title">
+              <span className={`aws-status aws-status--${selectedDevice.status}`}>
+                <span className="aws-status__dot" />
+              </span>
+              {selectedDevice.name}
+              <span style={{ fontWeight: 400, color: 'var(--color-text-muted)', fontSize: 'var(--text-small)' }}>
+                {selectedDevice.gnbConfig.virtualIp}
+              </span>
+            </h3>
+            <button className="aws-split-panel__close" onClick={() => setSelectedDevice(null)}>关闭 ✕</button>
+          </div>
+
+          {/* Split Panel 内部 Tabs */}
+          <div className="aws-split-panel__tabs">
+            <button className={`aws-split-panel__tab ${splitTab === 'details' ? 'aws-split-panel__tab--active' : ''}`} onClick={() => setSplitTab('details')}>
+              详细信息
+            </button>
+            <button className={`aws-split-panel__tab ${splitTab === 'security' ? 'aws-split-panel__tab--active' : ''}`} onClick={() => setSplitTab('security')}>
+              安全配置
+            </button>
+            <button className={`aws-split-panel__tab ${splitTab === 'tunnels' ? 'aws-split-panel__tab--active' : ''}`} onClick={() => setSplitTab('tunnels')}>
+              关联隧道 ({relatedTunnels.length})
+            </button>
+          </div>
+
+          <div className="aws-split-panel__body">
+            {/* 详细信息 Tab */}
+            {splitTab === 'details' && (
+              <div className="aws-kv aws-kv--3col">
+                <div className="aws-kv__item">
+                  <span className="aws-kv__label">节点名称</span>
+                  <span className="aws-kv__value">{selectedDevice.name}</span>
+                </div>
+                <div className="aws-kv__item">
+                  <span className="aws-kv__label">UUID</span>
+                  <span className="aws-kv__value aws-kv__value--mono">{selectedDevice.gnbConfig.uuid}</span>
+                </div>
+                <div className="aws-kv__item">
+                  <span className="aws-kv__label">虚拟 IP</span>
+                  <span className="aws-kv__value aws-kv__value--mono">{selectedDevice.gnbConfig.virtualIp}</span>
+                </div>
+                <div className="aws-kv__item">
+                  <span className="aws-kv__label">节点类型</span>
+                  <span className="aws-kv__value">{GNB_NODE_TYPE_LABELS[selectedDevice.gnbConfig.nodeType]}</span>
+                </div>
+                <div className="aws-kv__item">
+                  <span className="aws-kv__label">NAT 类型</span>
+                  <span className="aws-kv__value">{NAT_TYPE_LABELS[selectedDevice.gnbConfig.natType]}</span>
+                </div>
+                <div className="aws-kv__item">
+                  <span className="aws-kv__label">关联产品</span>
+                  <span className="aws-kv__value">{selectedDevice.productName}</span>
+                </div>
+                <div className="aws-kv__item" style={{ gridColumn: '1 / -1' }}>
+                  <span className="aws-kv__label">公钥</span>
+                  <span className="aws-kv__value aws-kv__value--mono">{selectedDevice.gnbConfig.publicKey}</span>
+                </div>
+              </div>
+            )}
+
+            {/* 安全配置 Tab */}
+            {splitTab === 'security' && (
+              <div>
+                <div className="aws-kv">
+                  <div className="aws-kv__item">
+                    <span className="aws-kv__label">加密算法</span>
+                    <span className="aws-kv__value">{GNB_CRYPTO_TYPE_LABELS[selectedDevice.gnbConfig.cryptoType]}</span>
+                  </div>
+                  <div className="aws-kv__item">
+                    <span className="aws-kv__label">密钥轮换</span>
+                    <span className="aws-kv__value">{GNB_KEY_UPDATE_LABELS[selectedDevice.gnbConfig.keyUpdateInterval]}</span>
+                  </div>
+                  <div className="aws-kv__item">
+                    <span className="aws-kv__label">Passcode</span>
+                    <span className="aws-kv__value aws-kv__value--action">
+                      <code style={{ background: 'var(--color-bg-primary)', padding: '2px 8px', borderRadius: 'var(--radius-sm)' }}>
+                        {maskPasscode(selectedDevice.gnbConfig.passcode)}
+                      </code>
+                      <button className="aws-btn aws-btn--link" onClick={() => { setShowPasscodeEdit(true); setNewPasscode(''); setPasscodeError('') }}>
+                        编辑
+                      </button>
+                    </span>
+                  </div>
+                  <div className="aws-kv__item">
+                    <span className="aws-kv__label">NTP 同步</span>
+                    <span className="aws-kv__value">
+                      {selectedDevice.gnbConfig.ntpSynced
+                        ? <span className="aws-status aws-status--online"><span className="aws-status__dot" />已同步</span>
+                        : <span className="aws-status aws-status--pending"><span className="aws-status__dot" />未同步</span>
+                      }
+                    </span>
+                  </div>
+                </div>
+                {selectedDevice.gnbConfig.keyUpdateInterval === 'none' && (
+                  <div className="aws-flashbar aws-flashbar--error" style={{ marginTop: 'var(--space-lg)', marginBottom: 0 }}>
+                    <span className="aws-flashbar__icon">⚠</span>
+                    <div className="aws-flashbar__content">密钥轮换未激活，建议启用 MINUTE 或 HOUR 模式以增强安全性</div>
+                  </div>
+                )}
+                {!selectedDevice.gnbConfig.ntpSynced && (
+                  <div className="aws-flashbar aws-flashbar--warning" style={{ marginTop: 'var(--space-md)', marginBottom: 0 }}>
+                    <span className="aws-flashbar__icon">⚠</span>
+                    <div className="aws-flashbar__content">NTP 未同步 — 密钥轮换在 MINUTE 模式下可能导致通信中断</div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 关联隧道 Tab */}
+            {splitTab === 'tunnels' && (
+              <div>
+                {relatedTunnels.length === 0 ? (
+                  <p style={{ color: 'var(--color-text-muted)', textAlign: 'center', padding: 'var(--space-xl)' }}>
+                    该节点暂无关联隧道
+                  </p>
+                ) : (
+                  <table className="aws-table">
+                    <thead>
+                      <tr>
+                        <th>对端节点</th>
+                        <th>延迟</th>
+                        <th>丢包</th>
+                        <th>加密</th>
+                        <th>状态</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {relatedTunnels.map(t => {
+                        const peerName = t.sourceNodeId === selectedDevice.id ? t.targetNodeName : t.sourceNodeName
+                        return (
+                          <tr key={t.id}>
+                            <td style={{ fontWeight: 600 }}>{peerName}</td>
+                            <td className="aws-table__cell--mono">{t.status === 'down' ? '—' : `${t.latency}ms`}</td>
+                            <td className="aws-table__cell--mono">{t.status === 'down' ? '—' : `${t.packetLoss}%`}</td>
+                            <td>{GNB_CRYPTO_TYPE_LABELS[t.cryptoType]}</td>
+                            <td>
+                              <span className={`aws-status aws-status--${t.status}`}>
+                                <span className="aws-status__dot" />
+                                {TUNNEL_STATUS_LABELS[t.status]}
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -646,8 +591,34 @@ export default function NetworkPage() {
               {regError && <div className="admin-form-error">{regError}</div>}
             </div>
             <div className="admin-modal__footer">
-              <button className="admin-btn admin-btn--ghost" onClick={() => setShowRegisterModal(false)}>取消</button>
-              <button className="admin-btn admin-btn--primary" onClick={handleRegister}>注册</button>
+              <button className="aws-btn aws-btn--normal" onClick={() => setShowRegisterModal(false)}>取消</button>
+              <button className="aws-btn aws-btn--primary" onClick={handleRegister}>注册节点</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Passcode 编辑模态框 ===== */}
+      {showPasscodeEdit && selectedDevice && (
+        <div className="admin-modal-overlay" onClick={() => setShowPasscodeEdit(false)}>
+          <div className="admin-modal" onClick={e => e.stopPropagation()}>
+            <div className="admin-modal__header">
+              <h3 className="admin-modal__title">编辑 Passcode — {selectedDevice.name}</h3>
+              <button className="admin-modal__close" onClick={() => setShowPasscodeEdit(false)}>×</button>
+            </div>
+            <div className="admin-modal__body">
+              <p style={{ color: 'var(--color-text-muted)', marginBottom: 'var(--space-md)', fontSize: 'var(--text-small)' }}>
+                当前: <code style={{ background: 'var(--color-bg-primary)', padding: '2px 6px', borderRadius: 'var(--radius-sm)' }}>{maskPasscode(selectedDevice.gnbConfig.passcode)}</code>
+              </p>
+              <div className="admin-form-group">
+                <label className="admin-form-label">新 Passcode</label>
+                <input className="admin-form-input" placeholder="0xXXXXXXXX（8位十六进制）" value={newPasscode} onChange={e => setNewPasscode(e.target.value)} style={{ fontFamily: 'var(--font-mono)' }} />
+              </div>
+              {passcodeError && <div className="admin-form-error">{passcodeError}</div>}
+            </div>
+            <div className="admin-modal__footer">
+              <button className="aws-btn aws-btn--normal" onClick={() => setShowPasscodeEdit(false)}>取消</button>
+              <button className="aws-btn aws-btn--primary" onClick={handlePasscodeUpdate}>保存</button>
             </div>
           </div>
         </div>
@@ -658,7 +629,7 @@ export default function NetworkPage() {
         <div className="admin-modal-overlay" onClick={() => setShowSubnetModal(false)}>
           <div className="admin-modal" onClick={e => e.stopPropagation()}>
             <div className="admin-modal__header">
-              <h3 className="admin-modal__title">创建私域子网</h3>
+              <h3 className="admin-modal__title">创建私域子网 (VPC)</h3>
               <button className="admin-modal__close" onClick={() => setShowSubnetModal(false)}>×</button>
             </div>
             <div className="admin-modal__body">
@@ -677,8 +648,8 @@ export default function NetworkPage() {
               {subnetError && <div className="admin-form-error">{subnetError}</div>}
             </div>
             <div className="admin-modal__footer">
-              <button className="admin-btn admin-btn--ghost" onClick={() => setShowSubnetModal(false)}>取消</button>
-              <button className="admin-btn admin-btn--primary" onClick={handleAddSubnet}>创建</button>
+              <button className="aws-btn aws-btn--normal" onClick={() => setShowSubnetModal(false)}>取消</button>
+              <button className="aws-btn aws-btn--primary" onClick={handleAddSubnet}>创建子网</button>
             </div>
           </div>
         </div>

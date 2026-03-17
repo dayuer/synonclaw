@@ -1,23 +1,29 @@
-# Sprint: GNB 操作面板
+# Sprint 计划 — SynonClaw 官网重新定义
 
-> 2026-03-16 · 复杂度 M
+> 日期: 2026-03-17 | 复杂度: L
 
-## 看板
+## Sprint 目标
 
-| 任务 | 负责 | 状态 |
-|------|------|------|
-| T1: types.ts 新增 Subnet 类型 | Alpha | ⬜ TODO |
-| T2: mockData.ts GNB 操作函数 | Alpha | ⬜ TODO |
-| T3: TDD 测试用例 | Alpha | ⬜ TODO |
-| T4: NetworkPage.tsx 操作面板 UI | Alpha | ⬜ TODO |
-| T5: admin.css 样式补充 | Beta | ⬜ TODO |
-| T6: 边界校验 + 补充测试 | Beta | ⬜ TODO |
-| T7: Code Review | Reviewer | ⬜ TODO |
-| T8: 文档更新 | Documenter | ⬜ TODO |
-| T9: 验收归档 | PM | ⬜ TODO |
+将 SynonClaw 官网从硬件品牌站升级为安全本地智能基础设施展示平台。
+
+---
+
+## 任务分配
+
+| # | 任务 | 分配 | 状态 |
+|---|------|------|------|
+| T-1 | Navbar + Footer 重构 | Alpha | ⬜ |
+| T-2 | 首页 Hero + 三支柱 + 社会证明 + CTA | Alpha | ⬜ |
+| T-3 | GNB 技术页（新增） | Alpha | ⬜ |
+| T-4 | 产品线页（Desk + Rack 合并） | Alpha | ⬜ |
+| T-5 | 软件生态页升级 | Alpha | ⬜ |
+| T-6 | 开发者页升级 | Alpha | ⬜ |
+| T-7 | 路由重构（App.tsx） | Alpha | ⬜ |
+| T-8 | 响应式适配 + 视觉打磨 | Beta | ⬜ |
+| T-9 | 旧页面清理（DeskPage + EnterprisePage） | Beta | ⬜ |
 
 ## 里程碑
 
-1. **M1 — 数据层就绪** (T1+T2+T3): 类型 + Mock + 测试全绿
-2. **M2 — UI 完成** (T4+T5+T6): 操作面板可交互
-3. **M3 — 交付** (T7+T8+T9): Review + 文档 + 归档
+- **M1**: T-1/T-2/T-7 完成 → 首页 + 导航可预览
+- **M2**: T-3/T-4 完成 → 核心技术/产品页可预览
+- **M3**: T-5/T-6/T-8/T-9 完成 → 全站可预览

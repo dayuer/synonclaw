@@ -1,12 +1,12 @@
+// @alpha: 官网导航栏 — 重构版
 import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import './Navbar.css'
 
 const NAV_LINKS = [
-  { path: '/', label: '首页' },
-  { path: '/desk', label: '个人版' },
-  { path: '/enterprise', label: '企业版' },
-  { path: '/ecosystem', label: '软件生态' },
+  { path: '/products', label: '产品' },
+  { path: '/technology', label: '技术' },
+  { path: '/ecosystem', label: '生态' },
   { path: '/developer', label: '开发者' },
 ]
 
@@ -21,14 +21,16 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  useEffect(() => {
-    setMenuOpen(false)
-  }, [location.pathname])
-
+  useEffect(() => { setMenuOpen(false) }, [location.pathname])
   useEffect(() => {
     document.body.style.overflow = menuOpen ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
   }, [menuOpen])
+
+  const isActive = (path: string) => {
+    if (path === '/') return location.pathname === '/'
+    return location.pathname.startsWith(path)
+  }
 
   return (
     <>
@@ -44,11 +46,14 @@ export default function Navbar() {
               <Link
                 key={path}
                 to={path}
-                className={`navbar__link ${location.pathname === path ? 'active' : ''}`}
+                className={`navbar__link ${isActive(path) ? 'active' : ''}`}
               >
                 {label}
               </Link>
             ))}
+            <Link to="/admin" className="navbar__link navbar__link--admin">
+              控制台
+            </Link>
           </div>
 
           <button
@@ -79,12 +84,19 @@ export default function Navbar() {
           <Link
             key={path}
             to={path}
-            className={`mobile-menu__link ${location.pathname === path ? 'active' : ''}`}
+            className={`mobile-menu__link ${isActive(path) ? 'active' : ''}`}
             onClick={() => setMenuOpen(false)}
           >
             {label}
           </Link>
         ))}
+        <Link
+          to="/admin"
+          className="mobile-menu__link"
+          onClick={() => setMenuOpen(false)}
+        >
+          控制台 →
+        </Link>
       </div>
     </>
   )
